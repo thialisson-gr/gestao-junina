@@ -1,10 +1,10 @@
 import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
 import { initializeApp } from "firebase/app";
 import {
-    browserLocalPersistence,
-    getReactNativePersistence,
-    initializeAuth,
-    signInAnonymously,
+  browserLocalPersistence,
+  getReactNativePersistence,
+  initializeAuth,
+  signInAnonymously,
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -13,7 +13,7 @@ import { Platform } from "react-native";
 
 // As SUAS chaves verdadeiras copiadas do painel do Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyBnuY6Z6nzhBIr-xDjeW2iFDIbuGn58R9A",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: "gestao-junina.firebaseapp.com",
   projectId: "gestao-junina",
   storageBucket: "gestao-junina.firebasestorage.app",
