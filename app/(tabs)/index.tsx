@@ -120,7 +120,10 @@ export default function HomeScreen() {
           <Text style={styles.actionText}>Novo Aluguer</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#111827' }]}>
+        <TouchableOpacity 
+          style={[styles.actionButton, { backgroundColor: '#111827' }]}
+          onPress={() => router.push('/scanner' as any)}
+        >
           <Feather name="maximize" size={28} color="#fff" />
           <Text style={styles.actionText}>Ler Etiqueta</Text>
         </TouchableOpacity>
