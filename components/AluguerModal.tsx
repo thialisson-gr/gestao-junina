@@ -20,8 +20,8 @@ const parseDataBR = (dataStr: string) => {
   return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
 };
 
-// 👇 NOTA: Adicionei a prop "aluguerParaEditar"
-export default function AluguerModal({ visible, onClose, onSave, alugueresExistentes, aluguerParaEditar }: any) {
+// 👇 ADICIONEI O kitInicialId AQUI NAS PROPS
+export default function AluguerModal({ visible, onClose, onSave, alugueresExistentes, aluguerParaEditar, kitInicialId }: any) {
   const [clientes, setClientes] = useState<any[]>([]);
   const [kits, setKits] = useState<any[]>([]);
   
@@ -44,11 +44,9 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   const [valorAluguel, setValorAluguel] = useState('');
   const [valorPago, setValorPago] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('');
-  
-  // 👇 NOVO ESTADO: Medidas da Costureira
   const [medidasCostureira, setMedidasCostureira] = useState('');
 
-  // 👇 NOVA LÓGICA: Preencher o formulário se for "Edição"
+  // 👇 LÓGICA ATUALIZADA: Se receber um kitInicialId, ele preenche a peça sozinho!
   useEffect(() => {
     if (visible && aluguerParaEditar) {
       setClienteId(aluguerParaEditar.cliente_id || '');
@@ -61,9 +59,13 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
       setFormaPagamento(aluguerParaEditar.forma_pagamento || '');
       setMedidasCostureira(aluguerParaEditar.medidas_costureira || '');
     } else if (visible && !aluguerParaEditar) {
-      limparFormulario(); // Limpa tudo se for "Novo"
+      limparFormulario();
+      // SE VIER DO SCANNER, PREENCHE O KIT
+      if (kitInicialId) {
+        setKitId(kitInicialId);
+      }
     }
-  }, [visible, aluguerParaEditar]);
+  }, [visible, aluguerParaEditar, kitInicialId]);
 
   useEffect(() => {
     if (visible) {
@@ -74,7 +76,7 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   }, [visible]);
 
   useEffect(() => { 
-    if(!aluguerParaEditar) setKitId(''); 
+    if(!aluguerParaEditar && !kitInicialId) setKitId(''); 
   }, [filtroSecao, filtroGenero]);
 
   const limparFormulario = () => {
@@ -123,7 +125,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
 
     const conflito = (alugueresExistentes || []).find((alug: any) => {
       if (!alug || !alug.id) return false;
-      // Se for o mesmo aluguer que estou a editar, não é conflito com ele mesmo
       if (aluguerParaEditar && alug.id === aluguerParaEditar.id) return false;
       if (alug.kit_id !== kitId) return false;
       if (alug.status === 'Devolvido' || alug.status === 'Cancelado') return false; 
@@ -142,7 +143,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
     const numAluguel = Number(valorAluguel.replace(/\./g, '').replace(',', '.'));
     const numPago = Number(valorPago.replace(/\./g, '').replace(',', '.'));
 
-    // Criamos o objeto sem o ID primeiro
     const dadosParaSalvar: any = {
       cliente_id: clienteId,
       cliente_nome: c?.responsavel_nome || aluguerParaEditar?.cliente_nome || "Sem nome",
@@ -157,17 +157,14 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
       forma_pagamento: formaPagamento,
       valor_multa: aluguerParaEditar?.valor_multa || 0,
       status_multa: aluguerParaEditar?.status_multa || 'Sem Multa',
-      medidas_costureira: medidasCostureira
+      medidas_costureira: medidasCostureira 
     };
 
-    // Só injetamos o ID se for uma EDIÇÃO (evita o erro undefined do Firebase)
     if (aluguerParaEditar && aluguerParaEditar.id) {
       dadosParaSalvar.id = aluguerParaEditar.id;
     }
 
     onSave(dadosParaSalvar);
-    limparFormulario();
-    
     limparFormulario();
   };
 
@@ -255,9 +252,12 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                       value={k.id} 
                     />
                   ))}
-                  {/* Se estiver a editar uma peça que está inativa/alugada, garante que ela aparece na lista */}
                   {aluguerParaEditar && kitId === aluguerParaEditar.kit_id && !kitsFiltrados.find(k => k.id === aluguerParaEditar.kit_id) && (
                     <Picker.Item label={`Peça Atual: ${aluguerParaEditar.kit_nome}`} value={aluguerParaEditar.kit_id} />
+                  )}
+                  {/* Garante que a peça vinda do scanner apareça mesmo se não passasse no filtro visual */}
+                  {kitInicialId && kitId === kitInicialId && !kitsFiltrados.find(k => k.id === kitInicialId) && kits.find(k => k.id === kitInicialId) && (
+                    <Picker.Item label={`Peça Lida: ${kits.find(k => k.id === kitInicialId)?.personagem}`} value={kitInicialId} />
                   )}
                 </Picker>
               </View>
@@ -272,7 +272,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                 </TouchableOpacity>
               </View>
 
-              {/* 👇 NOVO CAMPO: MEDIDAS DA COSTUREIRA */}
               <Text style={styles.sectionTitle}>3. Medidas para Costureira</Text>
               <TextInput 
                 style={[styles.input, { height: 80, textAlignVertical: 'top', marginBottom: 16 }]} 

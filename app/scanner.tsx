@@ -4,7 +4,9 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import AluguerModal from '../components/AluguerModal';
 import { escutarKits } from '../services/acervoService';
+import { adicionarAluguer } from '../services/agendaService'; // 👇 Para salvar o novo aluguer
 
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -13,6 +15,9 @@ export default function ScannerScreen() {
 
   const [kits, setKits] = useState<any[]>([]);
   const [pecaEncontrada, setPecaEncontrada] = useState<any>(null);
+  
+  // 👇 Estado para controlar o modal de aluguer diretamente daqui
+  const [modalAluguerVisible, setModalAluguerVisible] = useState(false);
 
   useEffect(() => {
     const unsub = escutarKits(
@@ -104,8 +109,9 @@ export default function ScannerScreen() {
             <Text style={styles.detalhesPeca}>📏 Tamanho: {pecaEncontrada.tamanho || 'Único'} | 👫 {pecaEncontrada.genero || 'Unissex'}</Text>
 
             <View style={styles.cartaoAcoes}>
+              {/* Botão de Ler Outra Peça (Ficou cinza) */}
               <TouchableOpacity 
-                style={styles.btnAcaoLaranja} 
+                style={[styles.btnAcaoLaranja, { backgroundColor: '#4b5563' }]} 
                 onPress={() => {
                   setPecaEncontrada(null);
                   setScanned(false);
@@ -114,6 +120,17 @@ export default function ScannerScreen() {
                 <Feather name="maximize" size={20} color="#fff" />
                 <Text style={styles.btnAcaoLaranjaTexto}>Ler Outra</Text>
               </TouchableOpacity>
+
+              {/* 👇 NOVO BOTÃO: Só aparece se a peça estiver Livre! */}
+              {(!pecaEncontrada.status_interno || pecaEncontrada.status_interno === 'Disponível') && (
+                <TouchableOpacity 
+                  style={[styles.btnAcaoLaranja, { backgroundColor: '#ea580c' }]} 
+                  onPress={() => setModalAluguerVisible(true)}
+                >
+                  <Feather name="shopping-bag" size={20} color="#fff" />
+                  <Text style={styles.btnAcaoLaranjaTexto}>Alugar</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         ) : (
@@ -129,6 +146,23 @@ export default function ScannerScreen() {
         </View>
 
       </View>
+
+      {/* 👇 MODAL SENDO CHAMADO DIRETAMENTE DAQUI */}
+      <AluguerModal 
+        visible={modalAluguerVisible} 
+        kitInicialId={pecaEncontrada?.id} // Mandamos a peça pra lá!
+        onClose={() => setModalAluguerVisible(false)} 
+        onSave={async (d: any) => { 
+          await adicionarAluguer(d);
+          setModalAluguerVisible(false);
+          // Volta pra mira para ler a próxima peça
+          setPecaEncontrada(null);
+          setScanned(false);
+          Alert.alert("Sucesso! 🎉", "Aluguer registado e integrado na Agenda.");
+        }} 
+        alugueresExistentes={[]} 
+      />
+
     </View>
   );
 }
