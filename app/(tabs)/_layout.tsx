@@ -64,6 +64,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Feather name="calendar" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen
+          name="financeiro"
+          options={{
+            title: 'Caixa',
+            tabBarIcon: ({ color }) => <Feather name="dollar-sign" size={24} color={color} />,
+          }}
+        />
     </Tabs>
   );
 }
