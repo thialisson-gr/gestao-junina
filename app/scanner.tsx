@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } fr
 
 import AluguerModal from '../components/AluguerModal';
 import { escutarKits } from '../services/acervoService';
-import { adicionarAluguer } from '../services/agendaService'; // 👇 Para salvar o novo aluguer
+import { adicionarAluguer, atualizarAluguer, escutarAlugueres } from '../services/agendaService';
 
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
@@ -14,17 +14,17 @@ export default function ScannerScreen() {
   const router = useRouter();
 
   const [kits, setKits] = useState<any[]>([]);
-  const [pecaEncontrada, setPecaEncontrada] = useState<any>(null);
+  const [alugueres, setAlugueres] = useState<any[]>([]); 
   
-  // 👇 Estado para controlar o modal de aluguer diretamente daqui
+  const [pecaEncontrada, setPecaEncontrada] = useState<any>(null);
+  const [aluguerAtivo, setAluguerAtivo] = useState<any>(null); 
+  
   const [modalAluguerVisible, setModalAluguerVisible] = useState(false);
 
   useEffect(() => {
-    const unsub = escutarKits(
-      (dados: any[]) => setKits(dados || []),
-      (erro: any) => console.log(erro)
-    );
-    return () => { if (unsub) unsub(); };
+    const unsubK = escutarKits((d: any[]) => setKits(d || []), (e: any) => console.log(e));
+    const unsubA = escutarAlugueres((d: any[]) => setAlugueres(d || []), (e: any) => console.log(e));
+    return () => { if (unsubK) unsubK(); if (unsubA) unsubA(); };
   }, []);
 
   if (!permission) {
@@ -40,9 +40,7 @@ export default function ScannerScreen() {
     return (
       <View style={styles.container}>
         <Feather name="camera-off" size={64} color="#9ca3af" style={{ marginBottom: 20 }} />
-        <Text style={styles.textoPermissao}>
-          Precisamos de permissão para usar a câmara e ler as etiquetas das peças.
-        </Text>
+        <Text style={styles.textoPermissao}>Precisamos de permissão para usar a câmara.</Text>
         <TouchableOpacity style={styles.btnPermissao} onPress={requestPermission}>
           <Text style={styles.btnPermissaoTexto}>Conceder Permissão</Text>
         </TouchableOpacity>
@@ -56,14 +54,17 @@ export default function ScannerScreen() {
   const handleBarCodeScanned = ({ data }: any) => {
     setScanned(true);
 
-    const peca = kits.find(k => k.id_etiqueta === data);
+    const peca = kits.find(k => k?.id_etiqueta === data);
 
     if (peca) {
       setPecaEncontrada(peca);
+      const ativo = alugueres.find(a => a?.kit_id === peca?.id && a?.status !== 'Devolvido' && a?.status !== 'Cancelado');
+      setAluguerAtivo(ativo || null);
+
     } else {
       Alert.alert(
         "Peça Não Encontrada 🕵️‍♂️",
-        `A etiqueta "${data}" não está registada no seu acervo do sistema.`,
+        `A etiqueta "${data}" não está registada no seu acervo.`,
         [
           { text: "Ler Outra Etiqueta", onPress: () => setScanned(false) },
           { text: "Voltar ao Início", onPress: () => router.back(), style: "cancel" }
@@ -72,19 +73,58 @@ export default function ScannerScreen() {
     }
   };
 
+  const handleDevolucaoAJato = () => {
+    if (!aluguerAtivo) return;
+    
+    Alert.alert(
+      "Confirmar Devolução",
+      `Deseja marcar a peça entregue por ${aluguerAtivo?.cliente_nome} como Devolvida?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        { 
+          text: "Sim, Receber", 
+          onPress: async () => {
+            await atualizarAluguer(aluguerAtivo.id, { status: 'Devolvido' });
+            Alert.alert("Sucesso! ✅", "Peça devolvida e libertada para novos alugueres.");
+            setPecaEncontrada(null);
+            setAluguerAtivo(null);
+            setScanned(false);
+          }
+        }
+      ]
+    );
+  };
+
+  const handleRaioX = () => {
+    const historico = alugueres.filter(a => a?.kit_id === pecaEncontrada?.id);
+    const totalVezes = historico.length;
+    const ultimoCliente = historico.length > 0 ? historico[0]?.cliente_nome : 'Nunca alugada';
+
+    Alert.alert(
+      "Raio-X: " + (pecaEncontrada?.id_etiqueta || ''),
+      `👗 Coleção: ${pecaEncontrada?.ano_tema || 'N/A'}\n` +
+      `📦 Status Interno: ${pecaEncontrada?.status_interno || 'Disponível'}\n\n` +
+      `📊 Histórico:\n` +
+      `- Alugada ${totalVezes} vezes no total.\n` +
+      `- Último cliente: ${ultimoCliente}\n\n` +
+      `(Nota: No futuro, este botão vai abrir o ecrã completo de detalhes da peça no Acervo!)`,
+      [{ text: "Fechar", style: "cancel" }]
+    );
+  };
+
+  // 👇 Os pontos de interrogação garantem que não há falhas mesmo se o estado estiver a ser limpo
+  const isDisponivel = !aluguerAtivo && (!pecaEncontrada?.status_interno || pecaEncontrada?.status_interno === 'Disponível');
+
   return (
     <View style={styles.container}>
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
         onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ["qr", "ean13", "ean8", "code128", "code39"],
-        }}
+        barcodeScannerSettings={{ barcodeTypes: ["qr", "ean13", "ean8", "code128", "code39"] }}
       />
 
       <View style={styles.overlay}>
-        
         <View style={styles.topo}>
           <TouchableOpacity style={styles.btnVoltar} onPress={() => router.back()}>
             <Feather name="arrow-left" size={24} color="#fff" />
@@ -95,43 +135,62 @@ export default function ScannerScreen() {
         
         {pecaEncontrada ? (
           <View style={styles.cartaoResultado}>
+            
             <View style={styles.cartaoHeader}>
-              <View style={[styles.statusBadge, { backgroundColor: pecaEncontrada.status_interno === 'Alugado' ? '#fee2e2' : '#dcfce7' }]}>
-                <Text style={[styles.statusText, { color: pecaEncontrada.status_interno === 'Alugado' ? '#dc2626' : '#16a34a' }]}>
-                  {pecaEncontrada.status_interno || 'Disponível'}
+              <View style={[styles.statusBadge, { backgroundColor: aluguerAtivo ? '#fee2e2' : '#dcfce7' }]}>
+                <Text style={[styles.statusText, { color: aluguerAtivo ? '#dc2626' : '#16a34a' }]}>
+                  {aluguerAtivo ? 'ALUGADO' : 'LIVRE'}
                 </Text>
               </View>
-              <Text style={styles.textoEtiqueta}>#{pecaEncontrada.id_etiqueta}</Text>
+              <Text style={styles.textoEtiqueta}>#{pecaEncontrada?.id_etiqueta}</Text>
             </View>
 
-            <Text style={styles.nomePeca}>{pecaEncontrada.personagem || pecaEncontrada.descricao || 'Peça sem nome'}</Text>
-            <Text style={styles.detalhesPeca}>👗 Coleção: {pecaEncontrada.ano_tema || pecaEncontrada.tema || 'N/A'}</Text>
-            <Text style={styles.detalhesPeca}>📏 Tamanho: {pecaEncontrada.tamanho || 'Único'} | 👫 {pecaEncontrada.genero || 'Unissex'}</Text>
+            {/* 👇 Adicionámos o ?. antes de todas as propriedades para blindar o código */}
+            <Text style={styles.nomePeca}>{pecaEncontrada?.personagem || pecaEncontrada?.descricao || 'Peça sem nome'}</Text>
+            
+            {aluguerAtivo && (
+              <View style={styles.infoAluguerBox}>
+                <Feather name="user" size={14} color="#b91c1c" />
+                <Text style={styles.infoAluguerTexto}>
+                  Com: <Text style={{fontWeight: 'bold'}}>{aluguerAtivo?.cliente_nome}</Text> {'\n'}
+                  Volta em: {aluguerAtivo?.data_devolucao}
+                </Text>
+              </View>
+            )}
+
+            {!aluguerAtivo && (
+              <>
+                <Text style={styles.detalhesPeca}>👗 Coleção: {pecaEncontrada?.ano_tema || pecaEncontrada?.tema || 'N/A'}</Text>
+                <Text style={styles.detalhesPeca}>📏 Tamanho: {pecaEncontrada?.tamanho || 'Único'}</Text>
+              </>
+            )}
 
             <View style={styles.cartaoAcoes}>
-              {/* Botão de Ler Outra Peça (Ficou cinza) */}
-              <TouchableOpacity 
-                style={[styles.btnAcaoLaranja, { backgroundColor: '#4b5563' }]} 
-                onPress={() => {
-                  setPecaEncontrada(null);
-                  setScanned(false);
-                }}
-              >
-                <Feather name="maximize" size={20} color="#fff" />
-                <Text style={styles.btnAcaoLaranjaTexto}>Ler Outra</Text>
+              
+              <TouchableOpacity style={styles.btnRaioX} onPress={handleRaioX}>
+                <Feather name="search" size={20} color="#4b5563" />
               </TouchableOpacity>
 
-              {/* 👇 NOVO BOTÃO: Só aparece se a peça estiver Livre! */}
-              {(!pecaEncontrada.status_interno || pecaEncontrada.status_interno === 'Disponível') && (
-                <TouchableOpacity 
-                  style={[styles.btnAcaoLaranja, { backgroundColor: '#ea580c' }]} 
-                  onPress={() => setModalAluguerVisible(true)}
-                >
+              {isDisponivel && (
+                <TouchableOpacity style={[styles.btnAcao, { backgroundColor: '#ea580c' }]} onPress={() => setModalAluguerVisible(true)}>
                   <Feather name="shopping-bag" size={20} color="#fff" />
-                  <Text style={styles.btnAcaoLaranjaTexto}>Alugar</Text>
+                  <Text style={styles.btnAcaoTexto}>Alugar</Text>
                 </TouchableOpacity>
               )}
+
+              {aluguerAtivo && (
+                <TouchableOpacity style={[styles.btnAcao, { backgroundColor: '#16a34a' }]} onPress={handleDevolucaoAJato}>
+                  <Feather name="rotate-ccw" size={20} color="#fff" />
+                  <Text style={styles.btnAcaoTexto}>Receber Peça</Text>
+                </TouchableOpacity>
+              )}
+
             </View>
+            
+            <TouchableOpacity onPress={() => { setPecaEncontrada(null); setScanned(false); }} style={{marginTop: 15, paddingVertical: 10}}>
+              <Text style={{textAlign: 'center', color: '#6b7280', fontWeight: 'bold'}}>Ler outra etiqueta</Text>
+            </TouchableOpacity>
+
           </View>
         ) : (
           <View style={styles.miraExterna}>
@@ -141,57 +200,56 @@ export default function ScannerScreen() {
 
         <View style={styles.rodape}>
           <Text style={styles.instrucaoTexto}>
-            {pecaEncontrada ? "Peça identificada com sucesso!" : "Aponte a câmara para a etiqueta da peça"}
+            {pecaEncontrada ? "Ação rápida pronta!" : "Aponte a câmara para a etiqueta"}
           </Text>
         </View>
 
       </View>
 
-      {/* 👇 MODAL SENDO CHAMADO DIRETAMENTE DAQUI */}
       <AluguerModal 
         visible={modalAluguerVisible} 
-        kitInicialId={pecaEncontrada?.id} // Mandamos a peça pra lá!
+        kitInicialId={pecaEncontrada?.id} 
         onClose={() => setModalAluguerVisible(false)} 
         onSave={async (d: any) => { 
           await adicionarAluguer(d);
           setModalAluguerVisible(false);
-          // Volta pra mira para ler a próxima peça
           setPecaEncontrada(null);
           setScanned(false);
-          Alert.alert("Sucesso! 🎉", "Aluguer registado e integrado na Agenda.");
+          Alert.alert("Sucesso! 🎉", "Aluguer registado.");
         }} 
-        alugueresExistentes={[]} 
+        alugueresExistentes={alugueres || []} 
       />
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#111827' },
-  textoPermissao: { color: '#fff', fontSize: 16, textAlign: 'center', marginBottom: 20, lineHeight: 24, paddingHorizontal: 40 },
+  textoPermissao: { color: '#fff', fontSize: 16, textAlign: 'center', marginBottom: 20, paddingHorizontal: 40 },
   btnPermissao: { backgroundColor: '#ea580c', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 },
   btnPermissaoTexto: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  
   overlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'space-between' },
-  
   topo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 60, paddingHorizontal: 20 },
   btnVoltar: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
   tituloTopo: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  
   miraExterna: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   miraInterna: { width: 250, height: 250, borderWidth: 2, borderColor: '#ea580c', backgroundColor: 'transparent', borderRadius: 24 },
   
-  cartaoResultado: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, padding: 20, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, alignSelf: 'center', width: '90%' },
+  cartaoResultado: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, padding: 20, elevation: 5, alignSelf: 'center', width: '90%' },
   cartaoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase' },
   textoEtiqueta: { fontSize: 14, color: '#6b7280', fontWeight: 'bold' },
   nomePeca: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 8 },
   detalhesPeca: { fontSize: 14, color: '#4b5563', marginBottom: 4, fontWeight: '500' },
-  cartaoAcoes: { flexDirection: 'row', marginTop: 20, gap: 10 },
-  btnAcaoLaranja: { flex: 1, backgroundColor: '#ea580c', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 8 },
-  btnAcaoLaranjaTexto: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  
+  infoAluguerBox: { flexDirection: 'row', backgroundColor: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 4, marginBottom: 8, borderWidth: 1, borderColor: '#fecaca', alignItems: 'center', gap: 10 },
+  infoAluguerTexto: { color: '#991b1b', fontSize: 14, flex: 1 },
+
+  cartaoAcoes: { flexDirection: 'row', marginTop: 15, gap: 10 },
+  btnRaioX: { backgroundColor: '#f3f4f6', paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
+  btnAcao: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 8 },
+  btnAcaoTexto: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 
   rodape: { padding: 30, paddingBottom: 50, alignItems: 'center' },
   instrucaoTexto: { color: '#fff', fontSize: 16, textAlign: 'center', fontWeight: '500' }
