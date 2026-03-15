@@ -3,64 +3,156 @@ import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function KitCard({ kit, onPressOptions }: any) {
-  // Se a peça for antiga, assume "Disponível"
-  const statusAtual = kit.status_interno || 'Ativo';
+  if (!kit) return null;
+
+  // Função para dar a cor certa ao status da peça
+  const getStatusColor = () => {
+    if (kit.status_interno === 'Inativo') return { bg: '#fee2e2', text: '#dc2626' }; // Vermelho
+    if (kit.status_interno === 'Alugado') return { bg: '#fef3c7', text: '#d97706' }; // Laranja/Amarelo
+    return { bg: '#dcfce7', text: '#16a34a' }; // Verde (Ativo/Disponível)
+  };
+
+  const statusColors = getStatusColor();
 
   return (
     <View style={styles.card}>
+      
+      {/* LADO ESQUERDO: FOTO DA PEÇA */}
       <View style={styles.imageContainer}>
         {kit.imagem_url ? (
           <Image source={{ uri: kit.imagem_url }} style={styles.image} />
         ) : (
           <View style={styles.imagePlaceholder}>
-            <Feather name="image" size={24} color="#d1d5db" />
+            <Feather name="box" size={24} color="#9ca3af" />
           </View>
         )}
       </View>
 
+      {/* CENTRO: INFORMAÇÕES DA PEÇA */}
       <View style={styles.infoContainer}>
-        <Text style={styles.personagem}>{kit.personagem}</Text>
-        <Text style={styles.idEtiqueta}>{kit.id_etiqueta}</Text>
         
-        <View style={styles.badgesRow}>
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{kit.genero}</Text>
+        {/* Linha 1: Etiqueta e Status */}
+        <View style={styles.headerRow}>
+          <Text style={styles.etiqueta}>#{kit.id_etiqueta}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
+            <Text style={[styles.statusText, { color: statusColors.text }]}>
+              {kit.status_interno || 'Disponível'}
+            </Text>
           </View>
-          {kit.ano_tema ? (
-            <View style={[styles.badge, { backgroundColor: '#f3f4f6' }]}>
-              <Text style={[styles.badgeText, { color: '#4b5563' }]}>{kit.ano_tema}</Text>
-            </View>
-          ) : null}
         </View>
 
-        {/* ALERTA VISUAL DE STATUS */}
-        {statusAtual === 'Inativo' && (
-          <View style={[styles.statusBadge, { backgroundColor: '#fee2e2' }]}>
-            <Feather name="slash" size={12} color="#dc2626" style={{marginRight: 4}} />
-            <Text style={[styles.statusText, { color: '#dc2626' }]}>Inativo</Text>
-          </View>
-        )}
+        {/* Linha 2: Nome da Peça */}
+        <Text style={styles.personagem} numberOfLines={1}>{kit.personagem}</Text>
+        
+        {/* Linha 3: Coleção (Só aparece se tiver preenchido) */}
+        {kit.ano_tema ? (
+          <Text style={styles.tema} numberOfLines={1}>
+            <Feather name="bookmark" size={12} /> Coleção: {kit.ano_tema}
+          </Text>
+        ) : null}
+
+        {/* Linha 4: Gênero e Categoria */}
+        <Text style={styles.detalhes}>
+          {kit.genero} • {kit.categoria || 'Roupa'}
+        </Text>
       </View>
 
-      <TouchableOpacity style={styles.optionsButton} onPress={onPressOptions}>
-        <Feather name="more-vertical" size={20} color="#6b7280" />
+      {/* LADO DIREITO: BOTÃO DE OPÇÕES (Editar/Excluir) */}
+      <TouchableOpacity style={styles.btnOpcoes} onPress={onPressOptions}>
+        <Feather name="more-vertical" size={20} color="#4b5563" />
       </TouchableOpacity>
+      
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 12, marginBottom: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#f3f4f6', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  imageContainer: { width: 64, height: 80, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f9fafb', marginRight: 16 },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
-  imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f4f6' },
-  infoContainer: { flex: 1, justifyContent: 'center' },
-  personagem: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
-  idEtiqueta: { fontSize: 13, color: '#6b7280', marginBottom: 8 },
-  badgesRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  badge: { backgroundColor: '#fff7ed', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  badgeText: { color: '#ea580c', fontSize: 11, fontWeight: '600' },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 8, alignSelf: 'flex-start' },
-  statusText: { fontSize: 11, fontWeight: 'bold' },
-  optionsButton: { padding: 8 },
+  card: {
+    flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    marginBottom: 12,
+    padding: 12,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4
+  },
+  imageContainer: {
+    width: 80, // Um pouco maior para ver bem os detalhes da roupa
+    height: 80,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    marginRight: 12,
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  imagePlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 2, // Espaçamento suave entre as linhas
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 8,
+  },
+  etiqueta: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#ea580c',
+    backgroundColor: '#fff7ed',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  personagem: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  tema: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  detalhes: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  btnOpcoes: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  }
 });
