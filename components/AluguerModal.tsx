@@ -20,23 +20,19 @@ const parseDataBR = (dataStr: string) => {
   return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
 };
 
-export default function AluguerModal({ visible, onClose, onSave, alugueresExistentes }: any) {
+// 👇 NOTA: Adicionei a prop "aluguerParaEditar"
+export default function AluguerModal({ visible, onClose, onSave, alugueresExistentes, aluguerParaEditar }: any) {
   const [clientes, setClientes] = useState<any[]>([]);
   const [kits, setKits] = useState<any[]>([]);
   
-  // ==========================================
-  // NOVOS ESTADOS PARA A BUSCA DE CLIENTES
-  // ==========================================
   const [clienteId, setClienteId] = useState('');
   const [buscaCliente, setBuscaCliente] = useState('');
   const [mostrarListaClientes, setMostrarListaClientes] = useState(false);
   
-  // Funil de Acervo
   const [filtroSecao, setFiltroSecao] = useState(''); 
   const [filtroGenero, setFiltroGenero] = useState('Todos'); 
   const [kitId, setKitId] = useState(''); 
 
-  // Datas e Financeiro
   const [dataRetirada, setDataRetirada] = useState('');
   const [dateObjectRetirada, setDateObjectRetirada] = useState(new Date());
   const [showPickerRetirada, setShowPickerRetirada] = useState(false);
@@ -48,6 +44,26 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   const [valorAluguel, setValorAluguel] = useState('');
   const [valorPago, setValorPago] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('');
+  
+  // 👇 NOVO ESTADO: Medidas da Costureira
+  const [medidasCostureira, setMedidasCostureira] = useState('');
+
+  // 👇 NOVA LÓGICA: Preencher o formulário se for "Edição"
+  useEffect(() => {
+    if (visible && aluguerParaEditar) {
+      setClienteId(aluguerParaEditar.cliente_id || '');
+      setBuscaCliente(aluguerParaEditar.cliente_nome || '');
+      setKitId(aluguerParaEditar.kit_id || '');
+      setDataRetirada(aluguerParaEditar.data_retirada || '');
+      setDataDevolucao(aluguerParaEditar.data_devolucao || '');
+      setValorAluguel(aluguerParaEditar.valor_aluguel ? String(aluguerParaEditar.valor_aluguel.toFixed(2)).replace('.', ',') : '');
+      setValorPago(aluguerParaEditar.valor_pago ? String(aluguerParaEditar.valor_pago.toFixed(2)).replace('.', ',') : '');
+      setFormaPagamento(aluguerParaEditar.forma_pagamento || '');
+      setMedidasCostureira(aluguerParaEditar.medidas_costureira || '');
+    } else if (visible && !aluguerParaEditar) {
+      limparFormulario(); // Limpa tudo se for "Novo"
+    }
+  }, [visible, aluguerParaEditar]);
 
   useEffect(() => {
     if (visible) {
@@ -57,14 +73,21 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
     }
   }, [visible]);
 
-  useEffect(() => { setKitId(''); }, [filtroSecao, filtroGenero]);
+  useEffect(() => { 
+    if(!aluguerParaEditar) setKitId(''); 
+  }, [filtroSecao, filtroGenero]);
 
-  // Lógica de Filtro dos Clientes
+  const limparFormulario = () => {
+    setClienteId(''); setBuscaCliente(''); setMostrarListaClientes(false);
+    setKitId(''); setDataRetirada(''); setDataDevolucao('');
+    setValorAluguel(''); setValorPago(''); setFormaPagamento(''); 
+    setFiltroSecao(''); setFiltroGenero('Todos'); setMedidasCostureira('');
+  };
+
   const clientesFiltrados = clientes.filter(c => 
     c && c.id && c.responsavel_nome && c.responsavel_nome.toLowerCase().includes(buscaCliente.toLowerCase())
   );
 
-  // Lógica do Funil de Peças
   const anosTemasUnicos = [...new Set(kits
     .filter(k => k && k.categoria !== 'Acessório' && k.categoria !== 'Acessorio' && k.tipo !== 'Acessório')
     .map(k => k.ano_tema || k.tema)
@@ -73,13 +96,8 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
 
   const kitsFiltrados = kits.filter(k => {
     if (!k) return false;
-
-    // === NOVA REGRA DE BLINDAGEM ===
-    // Se a peça for antiga e não tiver status, assumimos 'Disponível'
     const statusPeca = k.status_interno || 'Disponível';
-    if (statusPeca !== 'Disponível') return false; // Esconde tudo o que estiver na costureira/lavandaria!
-    // ===============================
-
+    if (statusPeca !== 'Disponível') return false; 
     if (filtroSecao) {
       const isAcessorio = k.categoria === 'Acessório' || k.categoria === 'Acessorio' || k.tipo === 'Acessório';
       if (filtroSecao === 'Acessorio') { if (!isAcessorio) return false; } 
@@ -94,7 +112,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   });
 
   const confirmar = () => {
-    // Se o cliente não foi escolhido na lista, bloqueia
     if (!clienteId) {
       Alert.alert("Atenção", "Por favor, selecione um cliente da lista clicando no nome dele.");
       return;
@@ -106,6 +123,8 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
 
     const conflito = (alugueresExistentes || []).find((alug: any) => {
       if (!alug || !alug.id) return false;
+      // Se for o mesmo aluguer que estou a editar, não é conflito com ele mesmo
+      if (aluguerParaEditar && alug.id === aluguerParaEditar.id) return false;
       if (alug.kit_id !== kitId) return false;
       if (alug.status === 'Devolvido' || alug.status === 'Cancelado') return false; 
       const inicioA = dateObjectRetirada; const fimA = dateObjectDevolucao;
@@ -120,32 +139,36 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
 
     const c = clientes.find(item => item && item.id === clienteId);
     const k = kits.find(item => item && item.id === kitId);
-
     const numAluguel = Number(valorAluguel.replace(/\./g, '').replace(',', '.'));
     const numPago = Number(valorPago.replace(/\./g, '').replace(',', '.'));
 
-    onSave({
+    // Criamos o objeto sem o ID primeiro
+    const dadosParaSalvar: any = {
       cliente_id: clienteId,
-      cliente_nome: c?.responsavel_nome || "Sem nome",
-      // 👇 ADICIONE ESTA LINHA (Ele vai tentar achar o campo telefone, celular ou whatsapp)
-      cliente_telefone: c?.responsavel_whatsapp || "", 
+      cliente_nome: c?.responsavel_nome || aluguerParaEditar?.cliente_nome || "Sem nome",
+      cliente_telefone: c?.responsavel_whatsapp || aluguerParaEditar?.cliente_telefone || "", 
       kit_id: kitId,
-      kit_nome: `${k?.id_etiqueta ? '['+k.id_etiqueta+'] ' : ''}${k?.personagem || k?.descricao || "Sem nome"}`,
+      kit_nome: `${k?.id_etiqueta ? '['+k.id_etiqueta+'] ' : ''}${k?.personagem || k?.descricao || aluguerParaEditar?.kit_nome || "Sem nome"}`,
       data_retirada: dataRetirada,
       data_devolucao: dataDevolucao,
-      status: 'Pendente',
+      status: aluguerParaEditar?.status || 'Pendente',
       valor_aluguel: numAluguel || 0,
       valor_pago: numPago || 0,
       forma_pagamento: formaPagamento,
-      valor_multa: 0,
-      status_multa: 'Sem Multa'
-    });
+      valor_multa: aluguerParaEditar?.valor_multa || 0,
+      status_multa: aluguerParaEditar?.status_multa || 'Sem Multa',
+      medidas_costureira: medidasCostureira
+    };
+
+    // Só injetamos o ID se for uma EDIÇÃO (evita o erro undefined do Firebase)
+    if (aluguerParaEditar && aluguerParaEditar.id) {
+      dadosParaSalvar.id = aluguerParaEditar.id;
+    }
+
+    onSave(dadosParaSalvar);
+    limparFormulario();
     
-    // Limpar tudo
-    setClienteId(''); setBuscaCliente(''); setMostrarListaClientes(false);
-    setKitId(''); setDataRetirada(''); setDataDevolucao('');
-    setValorAluguel(''); setValorPago(''); setFormaPagamento(''); 
-    setFiltroSecao(''); setFiltroGenero('Todos');
+    limparFormulario();
   };
 
   return (
@@ -154,11 +177,8 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
         <View style={styles.modalBg}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Novo Aluguer</Text>
+              <Text style={styles.modalTitle}>{aluguerParaEditar ? '✏️ Editar Aluguer' : '✨ Novo Aluguer'}</Text>
               
-              {/* ========================================== */}
-              {/* CAMPO DE BUSCA DE CLIENTES INTELIGENTE */}
-              {/* ========================================== */}
               <Text style={styles.sectionTitle}>1. Buscar Cliente</Text>
               <View style={{ zIndex: 10 }}>
                 <View style={styles.searchContainer}>
@@ -169,12 +189,11 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                     value={buscaCliente}
                     onChangeText={(texto) => {
                       setBuscaCliente(texto);
-                      setClienteId(''); // Apaga o ID se o utilizador alterar o texto
-                      setMostrarListaClientes(true); // Mostra a lista ao digitar
+                      setClienteId('');
+                      setMostrarListaClientes(true);
                     }}
                     onFocus={() => setMostrarListaClientes(true)}
                   />
-                  {/* Botão para limpar a busca */}
                   {buscaCliente.length > 0 && (
                     <TouchableOpacity onPress={() => { setBuscaCliente(''); setClienteId(''); setMostrarListaClientes(false); }}>
                       <Feather name="x-circle" size={20} color="#9ca3af" style={{ padding: 10 }} />
@@ -182,7 +201,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                   )}
                 </View>
 
-                {/* Lista Suspensa (Aparece apenas quando digita) */}
                 {mostrarListaClientes && buscaCliente.length > 0 && (
                   <View style={styles.listaBuscaContainer}>
                     <ScrollView nestedScrollEnabled style={{ maxHeight: 150 }} keyboardShouldPersistTaps="handled">
@@ -192,10 +210,10 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                             key={c.id}
                             style={styles.itemBusca}
                             onPress={() => {
-                              setClienteId(c.id); // Guarda o ID verdadeiro
-                              setBuscaCliente(c.responsavel_nome); // Preenche o Input com o nome lindo
-                              setMostrarListaClientes(false); // Esconde a lista
-                              Keyboard.dismiss(); // Esconde o teclado
+                              setClienteId(c.id);
+                              setBuscaCliente(c.responsavel_nome);
+                              setMostrarListaClientes(false);
+                              Keyboard.dismiss();
                             }}
                           >
                             <Text style={styles.itemBuscaTexto}>{c.responsavel_nome}</Text>
@@ -237,6 +255,10 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                       value={k.id} 
                     />
                   ))}
+                  {/* Se estiver a editar uma peça que está inativa/alugada, garante que ela aparece na lista */}
+                  {aluguerParaEditar && kitId === aluguerParaEditar.kit_id && !kitsFiltrados.find(k => k.id === aluguerParaEditar.kit_id) && (
+                    <Picker.Item label={`Peça Atual: ${aluguerParaEditar.kit_nome}`} value={aluguerParaEditar.kit_id} />
+                  )}
                 </Picker>
               </View>
 
@@ -250,7 +272,17 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.sectionTitle}>Valores (R$)</Text>
+              {/* 👇 NOVO CAMPO: MEDIDAS DA COSTUREIRA */}
+              <Text style={styles.sectionTitle}>3. Medidas para Costureira</Text>
+              <TextInput 
+                style={[styles.input, { height: 80, textAlignVertical: 'top', marginBottom: 16 }]} 
+                placeholder="Ex: Fazer bainha 2cm, apertar cintura..." 
+                multiline={true}
+                value={medidasCostureira} 
+                onChangeText={setMedidasCostureira} 
+              />
+
+              <Text style={styles.sectionTitle}>4. Valores (R$)</Text>
               
               <View style={styles.row}>
                 <TextInput style={[styles.input, {flex: 1, marginRight: 8}]} placeholder="Total" keyboardType="numeric" value={valorAluguel} onChangeText={(t) => setValorAluguel(formatarMoeda(t))} />
@@ -267,11 +299,11 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
               </View>
 
               <TouchableOpacity style={styles.btnSalvar} onPress={confirmar}>
-                <Text style={styles.btnSalvarText}>Salvar Aluguer</Text>
+                <Text style={styles.btnSalvarText}>{aluguerParaEditar ? 'Atualizar Aluguer' : 'Salvar Aluguer'}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => {
                 onClose();
-                setBuscaCliente(''); setMostrarListaClientes(false);
+                limparFormulario();
               }} style={styles.btnCancelar}>
                 <Text style={styles.btnCancelarText}>Cancelar</Text>
               </TouchableOpacity>
@@ -301,8 +333,6 @@ const styles = StyleSheet.create({
   btnSalvarText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   btnCancelar: { marginTop: 16, padding: 12 },
   btnCancelarText: { color: '#ef4444', textAlign: 'center', fontWeight: '600' },
-  
-  // Estilos da Busca Inteligente
   searchContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb', borderRadius: 8, marginBottom: 8 },
   searchIcon: { paddingLeft: 12 },
   searchInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 10, fontSize: 16, color: '#111827' },

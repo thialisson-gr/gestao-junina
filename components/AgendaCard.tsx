@@ -52,6 +52,16 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
 
       <Text style={styles.cardKit}>{item.kit_nome}</Text>
       
+      {/* ========================================== */}
+      {/* SELO DA COSTUREIRA (Só aparece se houver medidas) */}
+      {/* ========================================== */}
+      {item.medidas_costureira && item.medidas_costureira.trim() !== '' && (
+        <View style={styles.badgeCostureira}>
+          <Feather name="scissors" size={12} color="#9333ea" />
+          <Text style={styles.badgeCostureiraText}>Com Ajustes</Text>
+        </View>
+      )}
+
       <Text style={styles.cardDate}>
         <Feather name="calendar" size={14} color="#ea580c" /> {item.data_retirada || "S/Data"} até {item.data_devolucao || "S/Data"}
       </Text>
@@ -88,6 +98,11 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
   badgeText: { fontSize: 11, fontWeight: 'bold', textTransform: 'uppercase' },
   cardKit: { fontSize: 14, color: '#4b5563', marginBottom: 8 },
+  
+  // 👇 Novos estilos para o selo da Costureira
+  badgeCostureira: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#faf5ff', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#e9d5ff', marginBottom: 8 },
+  badgeCostureiraText: { fontSize: 10, color: '#9333ea', marginLeft: 4, fontWeight: 'bold', textTransform: 'uppercase' },
+  
   cardDate: { fontSize: 13, color: '#ea580c', fontWeight: '600', marginTop: 4 },
   footerContainer: { marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
   financeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

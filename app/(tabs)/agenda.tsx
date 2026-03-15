@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
-// IMPORTANTE: Adicionámos o 'Linking' aqui em cima!
 import { Feather } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import AgendaCard from '../../components/AgendaCard';
@@ -19,6 +18,9 @@ export default function AgendaScreen() {
   const [loading, setLoading] = useState(true);
   
   const [modalVisible, setModalVisible] = useState(false);
+  // 👇 NOVO ESTADO: Controla qual aluguer vai para o Modal de Edição
+  const [aluguerParaEditar, setAluguerParaEditar] = useState<any>(null);
+
   const [abaAtiva, setAbaAtiva] = useState('Todos');
   const abas = ['Todos', 'Pendente', 'Entregue', 'Devolvido', 'Atrasado'];
 
@@ -68,9 +70,6 @@ export default function AgendaScreen() {
     setModalMultaVisible(false);
   };
 
-  // ==========================================
-  // NOVA FUNÇÃO: ABRIR WHATSAPP
-  // ==========================================
   const abrirWhatsApp = () => {
     const telefone = aluguerSelecionado?.cliente_telefone;
     const nome = aluguerSelecionado?.cliente_nome;
@@ -81,15 +80,9 @@ export default function AgendaScreen() {
       return;
     }
 
-    // Limpa tudo o que não for número (tira os () e os -)
     let numeroLimpo = telefone.replace(/\D/g, '');
-    
-    // Adiciona o código do Brasil se o número não tiver (Assume Brasil 55 por padrão)
-    if (numeroLimpo.length <= 11) {
-      numeroLimpo = `55${numeroLimpo}`;
-    }
+    if (numeroLimpo.length <= 11) { numeroLimpo = `55${numeroLimpo}`; }
 
-    // Mensagem inteligente que muda consoante o status!
     let mensagem = `Olá ${nome}! Tudo bem? Passando para avisar sobre o seu aluguer da peça *${peca}*...`;
     
     if (aluguerSelecionado.status === 'Pendente') {
@@ -98,16 +91,12 @@ export default function AgendaScreen() {
       mensagem = `Olá ${nome}! Tudo bem? Apenas um lembrete amigável de que a devolução da peça *${peca}* está marcada para o dia ${aluguerSelecionado.data_devolucao}. Qualquer dúvida, estamos à disposição! 🗓️`;
     }
 
-    // Tenta abrir a aplicação do WhatsApp
     const url = `whatsapp://send?phone=${numeroLimpo}&text=${encodeURIComponent(mensagem)}`;
     
     Linking.canOpenURL(url)
       .then(suportado => {
-        if (!suportado) {
-          Alert.alert("Erro", "O WhatsApp não parece estar instalado neste telemóvel.");
-        } else {
-          return Linking.openURL(url);
-        }
+        if (!suportado) { Alert.alert("Erro", "O WhatsApp não parece estar instalado."); } 
+        else { return Linking.openURL(url); }
       })
       .catch(err => console.error('Ocorreu um erro ao abrir o WhatsApp', err));
   };
@@ -131,7 +120,10 @@ export default function AgendaScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Agenda</Text>
-        <TouchableOpacity style={styles.btnAdd} onPress={() => setModalVisible(true)}>
+        <TouchableOpacity style={styles.btnAdd} onPress={() => {
+          setAluguerParaEditar(null);
+          setModalVisible(true);
+        }}>
           <Feather name="plus" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
@@ -161,14 +153,26 @@ export default function AgendaScreen() {
         </ScrollView>
       )}
 
+      {/* 👇 MODAL ATUALIZADO PARA SUPORTAR EDIÇÃO E SALVAR NO FIREBASE */}
       <AluguerModal 
         visible={modalVisible} 
-        onClose={() => setModalVisible(false)} 
-        onSave={async (d: any) => { await adicionarAluguer(d); setModalVisible(false); }} 
+        aluguerParaEditar={aluguerParaEditar}
+        onClose={() => {
+          setModalVisible(false);
+          setAluguerParaEditar(null);
+        }} 
+        onSave={async (d: any) => { 
+          if(d.id) {
+            await atualizarAluguer(d.id, d); // Se tem ID, atualiza!
+          } else {
+            await adicionarAluguer(d); // Se não tem ID, cria um novo!
+          }
+          setModalVisible(false); 
+          setAluguerParaEditar(null);
+        }} 
         alugueresExistentes={alugueres || []} 
       />
 
-      {/* MENU DE OPÇÕES COM O NOVO BOTÃO WHATSAPP */}
       <Modal visible={modalOpcoesVisible} transparent animationType="fade">
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
@@ -177,7 +181,18 @@ export default function AgendaScreen() {
               {aluguerSelecionado?.cliente_nome || 'Cliente Desconhecido'}{'\n'}Peça: {aluguerSelecionado?.kit_nome || 'Peça Desconhecida'}
             </Text>
 
-            {/* BOTÃO DO WHATSAPP AQUI */}
+            {/* 👇 NOVO BOTÃO: EDITAR ALUGUER */}
+            <TouchableOpacity 
+              style={[styles.btnMenu, { backgroundColor: '#fff7ed', borderColor: '#fed7aa', marginBottom: 15 }]} 
+              onPress={() => { 
+                setModalOpcoesVisible(false); // Fecha o menu de opções
+                setAluguerParaEditar(aluguerSelecionado); // Passa os dados
+                setModalVisible(true); // Abre o formulário de edição
+              }}
+            >
+              <Text style={[styles.btnMenuText, { color: '#ea580c', fontWeight: 'bold' }]}>✏️ Editar Aluguer</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#dcfce7', borderColor: '#bbf7d0', marginBottom: 15 }]} onPress={() => { setModalOpcoesVisible(false); abrirWhatsApp(); }}>
               <Text style={[styles.btnMenuText, { color: '#16a34a', fontWeight: 'bold' }]}>💬 Enviar WhatsApp</Text>
             </TouchableOpacity>
