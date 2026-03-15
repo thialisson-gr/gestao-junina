@@ -1,13 +1,10 @@
-import React, { useEffect, useState } from 'react';
-// 1. Adicionados TextInput e ActivityIndicator aqui nas importações
 import { Feather } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import ClienteCard from '../../components/ClienteCard';
 import ClienteModal from '../../components/ClienteModal';
 import { auth } from '../../firebaseConfig';
-
-// Verifique se o seu ficheiro em services se chama 'clientesService' ou 'clienteService' (com ou sem 's')
 import { adicionarCliente, atualizarCliente, escutarClientes, excluirCliente } from '../../services/clienteService';
 
 export default function ClientesScreen() {
@@ -15,6 +12,9 @@ export default function ClientesScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [clienteEmEdicao, setClienteEmEdicao] = useState<any>(null);
+  
+  // 👇 NOVO ESTADO: Guarda o texto que você escreve na barra de busca
+  const [busca, setBusca] = useState('');
 
   useEffect(() => {
     const unsubscribe = escutarClientes(
@@ -41,7 +41,6 @@ export default function ClientesScreen() {
           text: "Excluir", 
           style: "destructive", 
           onPress: () => {
-            // Nova confirmação de segurança antes de apagar
             Alert.alert(
               "Confirmar Exclusão",
               `Tem certeza que deseja excluir ${cliente.responsavel_nome}? Esta ação não pode ser desfeita.`,
@@ -80,6 +79,13 @@ export default function ClientesScreen() {
     }
   };
 
+  // 👇 A MÁGICA DA BUSCA: Filtra a lista antes de a desenhar na tela
+  const clientesFiltrados = clientes.filter(cliente => {
+    if (!busca) return true; // Se a busca estiver vazia, mostra todos
+    const nomeDoCliente = (cliente.responsavel_nome || '').toLowerCase();
+    return nomeDoCliente.includes(busca.toLowerCase());
+  });
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -87,9 +93,23 @@ export default function ClientesScreen() {
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Feather name="search" size={20} color="#9ca3af" style={{ marginRight: 8 }} />
-            <TextInput style={{ flex: 1 }} placeholder="Pesquisar..." />
+            {/* 👇 Liguei a barra de pesquisa ao estado "busca" */}
+            <TextInput 
+              style={{ flex: 1, color: '#111827' }} 
+              placeholder="Pesquisar..." 
+              value={busca}
+              onChangeText={setBusca}
+            />
+            {busca.length > 0 && (
+              <TouchableOpacity onPress={() => setBusca('')}>
+                <Feather name="x-circle" size={18} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
           </View>
-          <TouchableOpacity style={styles.btnAdd} onPress={() => setModalVisible(true)}>
+          <TouchableOpacity style={styles.btnAdd} onPress={() => {
+            setClienteEmEdicao(null);
+            setModalVisible(true);
+          }}>
             <Feather name="plus" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -99,18 +119,23 @@ export default function ClientesScreen() {
         <ActivityIndicator size="large" color="#ea580c" style={{ marginTop: 50 }} />
       ) : (
         <ScrollView style={{ flex: 1, padding: 24 }}>
-          {clientes.map(cliente => (
-            <ClienteCard 
-              key={cliente.id} 
-              cliente={cliente} 
-              onPressWhatsApp={() => {/* sua função de whatsapp */}} 
-              onPressOptions={() => handleOpcoesCliente(cliente)} // <--- ESTA LINHA É A CHAVE
-            />
-          ))}
+          {/* 👇 Agora o map só desenha os clientes que passaram no filtro */}
+          {clientesFiltrados.length === 0 ? (
+            <Text style={{ textAlign: 'center', color: '#6b7280', marginTop: 20 }}>Nenhum cliente encontrado.</Text>
+          ) : (
+            clientesFiltrados.map(cliente => (
+              <ClienteCard 
+                key={cliente.id} 
+                cliente={cliente} 
+                onPressWhatsApp={() => {/* função futura de whatsapp */}} 
+                onPressOptions={() => handleOpcoesCliente(cliente)}
+              />
+            ))
+          )}
+          <View style={{ height: 80 }} />
         </ScrollView>
       )}
 
-      {/* 3. O Modal está agora no sítio certo, dentro do return */}
       <ClienteModal 
         visible={modalVisible} 
         onClose={() => {
@@ -123,11 +148,10 @@ export default function ClientesScreen() {
     </View>
   );
 }
-// 4. O bloco perdido que estava aqui foi apagado!
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
-  header: { backgroundColor: '#fff', paddingTop: 40, paddingBottom: 16, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  header: { backgroundColor: '#fff', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 24, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   title: { fontSize: 24, fontWeight: 'bold', color: '#111827', marginBottom: 16 },
   searchRow: { flexDirection: 'row', gap: 12 },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 12, paddingHorizontal: 12, height: 44 },
