@@ -11,7 +11,7 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
   const [imagemUri, setImagemUri] = useState<string | null>(null);
   
   // NOVO ESTADO: O Status Interno da Peça
-  const [statusInterno, setStatusInterno] = useState('Disponível');
+  const [statusInterno, setStatusInterno] = useState('Ativo');
 
   useEffect(() => {
     if (visible) {
@@ -22,7 +22,7 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
         setGenero(kitParaEditar.genero || 'Masculino');
         setImagemUri(kitParaEditar.imagem_url || null);
         // Traz o status antigo (ou assume Disponível se for uma peça antiga sem status)
-        setStatusInterno(kitParaEditar.status_interno || 'Disponível');
+        setStatusInterno(kitParaEditar.status_interno || 'Ativo');
       } else {
         setIdEtiqueta('');
         setPersonagem('');
@@ -129,20 +129,32 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
             </View>
 
             {/* ========================================== */}
-            {/* NOVA SECÇÃO: STATUS INTERNO DA PEÇA        */}
+            {/* STATUS DA PEÇA (Ativo/Inativo)             */}
             {/* ========================================== */}
-            <Text style={styles.label}>Status da Peça (Manutenção)</Text>
-            <View style={styles.row}>
-              {['Disponível', 'Lavandaria', 'Costureira'].map((status) => (
+            {kitParaEditar && ( // Só mostra este botão se for uma peça já existente
+              <View style={{ marginTop: 24 }}>
+                <Text style={[styles.label, { marginTop: 0 }]}>Status da Peça</Text>
                 <TouchableOpacity 
-                  key={status} 
-                  style={getStatusStyle(status)}
-                  onPress={() => setStatusInterno(status)}
+                  style={{
+                    backgroundColor: statusInterno === 'Ativo' ? '#fee2e2' : '#dcfce7',
+                    padding: 16,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    borderWidth: 1,
+                    borderColor: statusInterno === 'Ativo' ? '#ef4444' : '#22c55e'
+                  }}
+                  onPress={() => setStatusInterno(statusInterno === 'Ativo' ? 'Inativo' : 'Ativo')}
                 >
-                  <Text style={[styles.radioText, statusInterno === status && styles.radioTextActive]}>{status}</Text>
+                  <Text style={{
+                    color: statusInterno === 'Ativo' ? '#dc2626' : '#166534',
+                    fontSize: 16,
+                    fontWeight: 'bold'
+                  }}>
+                    {statusInterno === 'Ativo' ? '🚫 Inativar Peça' : '✅ Reativar Peça'}
+                  </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+              </View>
+            )}
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSalvar}>
               <Text style={styles.saveButtonText}>{kitParaEditar ? 'Guardar Alterações' : 'Guardar Peça'}</Text>

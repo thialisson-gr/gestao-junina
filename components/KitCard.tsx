@@ -4,7 +4,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function KitCard({ kit, onPressOptions }: any) {
   // Se a peça for antiga, assume "Disponível"
-  const statusAtual = kit.status_interno || 'Disponível';
+  const statusAtual = kit.status_interno || 'Ativo';
 
   return (
     <View style={styles.card}>
@@ -34,17 +34,10 @@ export default function KitCard({ kit, onPressOptions }: any) {
         </View>
 
         {/* ALERTA VISUAL DE STATUS */}
-        {statusAtual === 'Lavandaria' && (
-          <View style={[styles.statusBadge, { backgroundColor: '#dbeafe' }]}>
-            <Feather name="droplet" size={12} color="#2563eb" style={{marginRight: 4}} />
-            <Text style={[styles.statusText, { color: '#2563eb' }]}>Na Lavandaria</Text>
-          </View>
-        )}
-        
-        {statusAtual === 'Costureira' && (
+        {statusAtual === 'Inativo' && (
           <View style={[styles.statusBadge, { backgroundColor: '#fee2e2' }]}>
-            <Feather name="scissors" size={12} color="#dc2626" style={{marginRight: 4}} />
-            <Text style={[styles.statusText, { color: '#dc2626' }]}>Na Costureira</Text>
+            <Feather name="slash" size={12} color="#dc2626" style={{marginRight: 4}} />
+            <Text style={[styles.statusText, { color: '#dc2626' }]}>Inativo</Text>
           </View>
         )}
       </View>
