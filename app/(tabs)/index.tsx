@@ -1,70 +1,110 @@
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import AluguerModal from '../../components/AluguerModal';
+// 👇 Importando as funções do Firebase
+import { adicionarAluguer, atualizarAluguer, escutarAlugueres } from '../../services/agendaService';
+
+const parseDataBR = (dataStr: string) => {
+  if (!dataStr || !dataStr.includes('/')) return new Date(0);
+  const partes = dataStr.split('/');
+  return new Date(Number(partes[2]), Number(partes[1]) - 1, Number(partes[0]));
+};
+
+const getHojeStr = () => {
+  const hoje = new Date();
+  return `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+};
 
 export default function HomeScreen() {
-  const [modalVisible, setModalVisible] = useState(false);
+  const router = useRouter();  const [modalVisible, setModalVisible] = useState(false);
   const [aluguerParaEditar, setAluguerParaEditar] = useState<any>(null);
+  
+  // 👇 Novos estados para guardar os dados reais
+  const [alugueres, setAlugueres] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Escuta as alterações no Firebase em tempo real
+  useEffect(() => {
+    const unsub = escutarAlugueres(
+      (dados: any[]) => { setAlugueres(dados || []); setLoading(false); },
+      (erro: any) => { console.log(erro); setLoading(false); }
+    );
+    return () => { if(unsub) unsub(); };
+  }, []);
+
+  // Cria a data por extenso dinamicamente (Ex: "15 de Março, 2026")
+  const dataAtual = new Date();
+  const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const dataFormatadaTexto = `${dataAtual.getDate()} de ${meses[dataAtual.getMonth()]}, ${dataAtual.getFullYear()}`;
+
+  // ==========================================
+  // LÓGICA DO DASHBOARD (Calculada em tempo real)
+  // ==========================================
+  const hojeStr = getHojeStr();
+  const hojeObj = new Date();
+  hojeObj.setHours(0, 0, 0, 0);
+
+  let countEntregas = 0;
+  let countDevolucoes = 0;
+  let countAtrasados = 0;
+  let countCostureira = 0;
+  let agendaHoje: any[] = [];
+
+  alugueres.forEach(alug => {
+    const isDevolvido = alug.status === 'Devolvido';
+    const isCancelado = alug.status === 'Cancelado';
+    
+    // Ignora os que já estão finalizados ou cancelados
+    if (isDevolvido || isCancelado) return; 
+
+    const dataDevObj = parseDataBR(alug.data_devolucao);
+    let adicionadoNaAgenda = false;
+
+    // 1. Na Costureira (Tem ajustes e ainda não foi devolvido)
+    if (alug.medidas_costureira && alug.medidas_costureira.trim() !== '') {
+      countCostureira++;
+    }
+
+    // 2. Atrasados (Data de devolução passou de hoje)
+    if (dataDevObj < hojeObj) {
+      countAtrasados++;
+      agendaHoje.push({ ...alug, tipo: 'atraso', hora: 'Atrasado', aluno: alug.cliente_nome, kit: alug.kit_nome });
+      adicionadoNaAgenda = true;
+    }
+
+    // 3. Entregas (Retiradas) Hoje
+    if (alug.data_retirada === hojeStr) {
+      countEntregas++;
+      if (!adicionadoNaAgenda) {
+        agendaHoje.push({ ...alug, tipo: 'entrega', hora: 'Sai Hoje', aluno: alug.cliente_nome, kit: alug.kit_nome });
+        adicionadoNaAgenda = true;
+      }
+    }
+
+    // 4. Devoluções Hoje
+    if (alug.data_devolucao === hojeStr) {
+      countDevolucoes++;
+      if (!adicionadoNaAgenda) {
+        agendaHoje.push({ ...alug, tipo: 'devolucao', hora: 'Volta Hoje', aluno: alug.cliente_nome, kit: alug.kit_nome });
+      }
+    }
+  });
 
   const stats = [
-    { id: 'entregas', label: 'Entregas Hoje', value: '8', icon: 'arrow-up-circle', color: '#eff6ff', iconColor: '#1d4ed8' },
-    { id: 'devolucoes', label: 'Devolv. Hoje', value: '5', icon: 'arrow-down-circle', color: '#f0fdf4', iconColor: '#15803d' },
-    { id: 'atrasos', label: 'Atrasados', value: '3', icon: 'alert-triangle', color: '#fef2f2', iconColor: '#b91c1c' },
-    { id: 'costureira', label: 'Na Costureira', value: '12', icon: 'scissors', color: '#faf5ff', iconColor: '#7e22ce' },
+    { id: 'entregas', label: 'Entregas Hoje', value: countEntregas.toString(), icon: 'arrow-up-circle', color: '#eff6ff', iconColor: '#1d4ed8' },
+    { id: 'devolucoes', label: 'Devolv. Hoje', value: countDevolucoes.toString(), icon: 'arrow-down-circle', color: '#f0fdf4', iconColor: '#15803d' },
+    { id: 'atrasos', label: 'Atrasados', value: countAtrasados.toString(), icon: 'alert-triangle', color: '#fef2f2', iconColor: '#b91c1c' },
+    { id: 'costureira', label: 'Na Costureira', value: countCostureira.toString(), icon: 'scissors', color: '#faf5ff', iconColor: '#7e22ce' },
   ];
-
-  // Dados de teste com as medidas da costureira incluídas
-  const agendaHoje = [
-    { 
-      id: '1', 
-      tipo: 'entrega', 
-      aluno: 'João Pedro', 
-      kit: 'KIT-MASC-2026-005 (Noivo)', 
-      hora: '10:30', 
-      cliente_nome: 'João Pedro', 
-      kit_nome: 'KIT-MASC-2026-005 (Noivo)', 
-      medidas_costureira: 'Apertar cinto e fazer bainha' // 👈 Aqui está a magia!
-    },
-    { 
-      id: '2', 
-      tipo: 'atraso', 
-      aluno: 'Maria Clara', 
-      kit: 'KIT-FEM-2025-012 (Rainha)', 
-      hora: '2 dias', 
-      cliente_nome: 'Maria Clara', 
-      kit_nome: 'KIT-FEM-2025-012 (Rainha)', 
-      medidas_costureira: '' // Vazio = Sem tesourinha
-    },
-    { 
-      id: '3', 
-      tipo: 'devolucao', 
-      aluno: 'Lucas Silva', 
-      kit: 'KIT-MASC-2026-010 (Brincante)', 
-      hora: '14:00', 
-      cliente_nome: 'Lucas Silva', 
-      kit_nome: 'KIT-MASC-2026-010 (Brincante)', 
-      medidas_costureira: '' 
-    },
-  ];
-
-  const handleSalvarAluguer = (dadosDoAluguer: any) => {
-    console.log("Dados recebidos do Modal:", dadosDoAluguer);
-    if (dadosDoAluguer.id) {
-      console.log("Atualizando aluguer existente...");
-    } else {
-      console.log("Criando novo aluguer...");
-    }
-    setModalVisible(false);
-    setAluguerParaEditar(null);
-  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       
       <View style={styles.header}>
-        <Text style={styles.dateText}>13 de Março, 2026</Text>
+        <Text style={styles.dateText}>{dataFormatadaTexto}</Text>
         <Text style={styles.greeting}>Olá, Gestor! 👋</Text>
       </View>
 
@@ -86,86 +126,79 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Resumo do Dia</Text>
-        <View style={styles.statsGrid}>
-          {stats.map((stat) => (
-            <View key={stat.id} style={styles.statCard}>
-              <View style={styles.statHeader}>
-                <View style={[styles.iconWrapper, { backgroundColor: stat.color }]}>
-                  <Feather name={stat.icon as any} size={20} color={stat.iconColor} />
+      {loading ? (
+        <ActivityIndicator size="large" color="#ea580c" style={{ marginTop: 50 }} />
+      ) : (
+        <>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Resumo do Dia</Text>
+            <View style={styles.statsGrid}>
+              {stats.map((stat) => (
+                <View key={stat.id} style={styles.statCard}>
+                  <View style={styles.statHeader}>
+                    <View style={[styles.iconWrapper, { backgroundColor: stat.color }]}>
+                      <Feather name={stat.icon as any} size={20} color={stat.iconColor} />
+                    </View>
+                    <Text style={styles.statValue}>{stat.value}</Text>
+                  </View>
+                  <Text style={styles.statLabel}>{stat.label}</Text>
                 </View>
-                <Text style={styles.statValue}>{stat.value}</Text>
-              </View>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+              ))}
             </View>
-          ))}
-        </View>
-      </View>
+          </View>
 
-      <View style={styles.section}>
-        <View style={styles.agendaHeader}>
-          <Text style={styles.sectionTitle}>Próximos Movimentos</Text>
-          <TouchableOpacity>
-            <Text style={styles.seeAllText}>Ver Todos</Text>
-          </TouchableOpacity>
-        </View>
-        
-        {agendaHoje.map((item) => (
-          <TouchableOpacity 
-            key={item.id} 
-            style={styles.agendaItem}
-            activeOpacity={0.7}
-            onPress={() => {
-              // 👇 GARANTE QUE PASSA OS DADOS PARA O MODAL E ABRE COMO EDIÇÃO
-              setAluguerParaEditar(item);
-              setModalVisible(true);
-            }}
-          >
-            <View style={[styles.agendaIcon, { 
-              backgroundColor: item.tipo === 'entrega' ? '#eff6ff' : item.tipo === 'devolucao' ? '#f0fdf4' : '#fef2f2' 
-            }]}>
-              <Feather 
-                name={item.tipo === 'entrega' ? 'arrow-up-circle' : item.tipo === 'devolucao' ? 'arrow-down-circle' : 'alert-triangle'} 
-                size={20} 
-                color={item.tipo === 'entrega' ? '#1d4ed8' : item.tipo === 'devolucao' ? '#15803d' : '#b91c1c'} 
-              />
+          <View style={styles.section}>
+            <View style={styles.agendaHeader}>
+              <Text style={styles.sectionTitle}>Próximos Movimentos</Text>
+              <TouchableOpacity onPress={() => router.push('/agenda')}>
+                <Text style={styles.seeAllText}>Ver Todos</Text>
+              </TouchableOpacity>
             </View>
             
-            <View style={styles.agendaInfo}>
-              <Text style={styles.agendaName}>{item.aluno}</Text>
-              <Text style={styles.agendaKit} numberOfLines={1}>{item.kit}</Text>
-              
-              {/* ========================================== */}
-              {/* NOVA INDICAÇÃO VISUAL DA COSTUREIRA ✂️ */}
-              {/* ========================================== */}
-              {item.medidas_costureira && item.medidas_costureira.trim() !== '' && (
-                <View style={{ 
-                  flexDirection: 'row', 
-                  alignItems: 'center', 
-                  marginTop: 6, 
-                  backgroundColor: '#faf5ff', 
-                  alignSelf: 'flex-start', 
-                  paddingHorizontal: 8, 
-                  paddingVertical: 4, 
-                  borderRadius: 6,
-                  borderWidth: 1,
-                  borderColor: '#e9d5ff'
-                }}>
-                  <Feather name="scissors" size={12} color="#9333ea" />
-                  <Text style={{ fontSize: 10, color: '#9333ea', marginLeft: 4, fontWeight: 'bold', textTransform: 'uppercase' }}>
-                    Com Ajustes
+            {agendaHoje.length === 0 ? (
+              <Text style={{ textAlign: 'center', color: '#9ca3af', marginTop: 10 }}>Nenhuma movimentação pendente para hoje.</Text>
+            ) : (
+              agendaHoje.map((item) => (
+                <TouchableOpacity 
+                  key={item.id} 
+                  style={styles.agendaItem}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setAluguerParaEditar(item);
+                    setModalVisible(true);
+                  }}
+                >
+                  <View style={[styles.agendaIcon, { 
+                    backgroundColor: item.tipo === 'entrega' ? '#eff6ff' : item.tipo === 'devolucao' ? '#f0fdf4' : '#fef2f2' 
+                  }]}>
+                    <Feather 
+                      name={item.tipo === 'entrega' ? 'arrow-up-circle' : item.tipo === 'devolucao' ? 'arrow-down-circle' : 'alert-triangle'} 
+                      size={20} 
+                      color={item.tipo === 'entrega' ? '#1d4ed8' : item.tipo === 'devolucao' ? '#15803d' : '#b91c1c'} 
+                    />
+                  </View>
+                  
+                  <View style={styles.agendaInfo}>
+                    <Text style={styles.agendaName}>{item.aluno}</Text>
+                    <Text style={styles.agendaKit} numberOfLines={1}>{item.kit}</Text>
+                    
+                    {item.medidas_costureira && item.medidas_costureira.trim() !== '' && (
+                      <View style={styles.badgeCostureira}>
+                        <Feather name="scissors" size={12} color="#9333ea" />
+                        <Text style={styles.badgeCostureiraText}>Com Ajustes</Text>
+                      </View>
+                    )}
+                  </View>
+                  
+                  <Text style={[styles.agendaTime, { color: item.tipo === 'atraso' ? '#b91c1c' : '#111827' }]}>
+                    {item.hora}
                   </Text>
-                </View>
-              )}
-            </View>
-            
-            <Text style={[styles.agendaTime, { color: item.tipo === 'atraso' ? '#b91c1c' : '#111827' }]}>
-              {item.hora}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        </>
+      )}
 
       <View style={{ height: 40 }} />
 
@@ -176,8 +209,17 @@ export default function HomeScreen() {
           setModalVisible(false);
           setAluguerParaEditar(null);
         }} 
-        onSave={handleSalvarAluguer} 
-        alugueresExistentes={[]} 
+        onSave={async (d: any) => { 
+          // 👇 Agora o modal do Início salva diretamente no Firebase!
+          if(d.id) {
+            await atualizarAluguer(d.id, d);
+          } else {
+            await adicionarAluguer(d);
+          }
+          setModalVisible(false); 
+          setAluguerParaEditar(null);
+        }} 
+        alugueresExistentes={alugueres || []} 
       />
 
     </ScrollView>
@@ -207,5 +249,7 @@ const styles = StyleSheet.create({
   agendaInfo: { flex: 1 },
   agendaName: { fontSize: 14, fontWeight: 'bold', color: '#111827' },
   agendaKit: { fontSize: 12, color: '#6b7280', marginTop: 4 },
-  agendaTime: { fontSize: 12, fontWeight: 'bold' }
+  agendaTime: { fontSize: 12, fontWeight: 'bold' },
+  badgeCostureira: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#faf5ff', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#e9d5ff', marginTop: 6 },
+  badgeCostureiraText: { fontSize: 10, color: '#9333ea', marginLeft: 4, fontWeight: 'bold', textTransform: 'uppercase' },
 });
