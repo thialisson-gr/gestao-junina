@@ -119,7 +119,7 @@ export default function AgendaScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Agenda</Text>
+        <Text style={styles.headerTitle}>Agenda de Aluguéis</Text>
         <TouchableOpacity style={styles.btnAdd} onPress={() => {
           setAluguerParaEditar(null);
           setModalVisible(true);
@@ -141,9 +141,9 @@ export default function AgendaScreen() {
       {loading ? (
         <ActivityIndicator size="large" color="#ea580c" style={{ marginTop: 50 }} />
       ) : (
-        <ScrollView style={{ paddingHorizontal: 20, paddingTop: 10 }} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ paddingHorizontal: 20, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
           {alugueresFiltrados.length === 0 ? (
-            <Text style={styles.emptyText}>Nenhum registo em "{abaAtiva}".</Text>
+            <Text style={styles.emptyText}>Nenhuma peça no status "{abaAtiva}".</Text>
           ) : (
             alugueresFiltrados.map(item => (
               <AgendaCard key={item?.id || Math.random().toString()} item={item} onPressOpcoes={() => handleOpcoesAluguer(item)} /> 
@@ -153,7 +153,6 @@ export default function AgendaScreen() {
         </ScrollView>
       )}
 
-      {/* 👇 MODAL ATUALIZADO PARA SUPORTAR EDIÇÃO E SALVAR NO FIREBASE */}
       <AluguerModal 
         visible={modalVisible} 
         aluguerParaEditar={aluguerParaEditar}
@@ -163,9 +162,9 @@ export default function AgendaScreen() {
         }} 
         onSave={async (d: any) => { 
           if(d.id) {
-            await atualizarAluguer(d.id, d); // Se tem ID, atualiza!
+            await atualizarAluguer(d.id, d);
           } else {
-            await adicionarAluguer(d); // Se não tem ID, cria um novo!
+            await adicionarAluguer(d);
           }
           setModalVisible(false); 
           setAluguerParaEditar(null);
@@ -173,86 +172,75 @@ export default function AgendaScreen() {
         alugueresExistentes={alugueres || []} 
       />
 
-      <Modal visible={modalOpcoesVisible} transparent animationType="fade">
-        <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <Text style={[styles.modalTitle, {textAlign: 'center'}]}>Gerir Aluguer</Text>
-            <Text style={{marginBottom: 20, color: '#6b7280', textAlign: 'center'}}>
-              {aluguerSelecionado?.cliente_nome || 'Cliente Desconhecido'}{'\n'}Peça: {aluguerSelecionado?.kit_nome || 'Peça Desconhecida'}
+      {/* MODAL DE GERENCIAMENTO (OPÇÕES) */}
+      <Modal visible={modalOpcoesVisible} transparent animationType="slide">
+        <View style={styles.modalBgBottom}>
+          <View style={styles.modalContentBottom}>
+            <View style={styles.modalDragHandle} />
+            
+            <Text style={styles.modalTitleOpcoes}>Gerenciar Aluguel</Text>
+            <Text style={styles.modalSubOpcoes}>
+              {aluguerSelecionado?.cliente_nome} • {aluguerSelecionado?.kit_nome}
             </Text>
 
-            {/* 👇 NOVO BOTÃO: EDITAR ALUGUER */}
-            <TouchableOpacity 
-              style={[styles.btnMenu, { backgroundColor: '#fff7ed', borderColor: '#fed7aa', marginBottom: 15 }]} 
-              onPress={() => { 
-                setModalOpcoesVisible(false); // Fecha o menu de opções
-                setAluguerParaEditar(aluguerSelecionado); // Passa os dados
-                setModalVisible(true); // Abre o formulário de edição
-              }}
-            >
-              <Text style={[styles.btnMenuText, { color: '#ea580c', fontWeight: 'bold' }]}>✏️ Editar Aluguer</Text>
+            <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#fff7ed', borderColor: '#fed7aa', marginBottom: 15 }]} onPress={() => { setModalOpcoesVisible(false); setAluguerParaEditar(aluguerSelecionado); setModalVisible(true); }}>
+              <Text style={[styles.btnMenuText, { color: '#ea580c', fontWeight: 'bold' }]}>✏️ Editar Dados do Aluguel</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#dcfce7', borderColor: '#bbf7d0', marginBottom: 15 }]} onPress={() => { setModalOpcoesVisible(false); abrirWhatsApp(); }}>
-              <Text style={[styles.btnMenuText, { color: '#16a34a', fontWeight: 'bold' }]}>💬 Enviar WhatsApp</Text>
+              <Text style={[styles.btnMenuText, { color: '#16a34a', fontWeight: 'bold' }]}>💬 Avisar no WhatsApp</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.btnMenu} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Pendente' }); setModalOpcoesVisible(false); }}>
-              <Text style={styles.btnMenuText}>Mudar para: Pendente</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.btnMenu} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Entregue' }); setModalOpcoesVisible(false); }}>
-              <Text style={styles.btnMenuText}>Mudar para: Entregue</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.btnMenu} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Devolvido' }); setModalOpcoesVisible(false); }}>
-              <Text style={styles.btnMenuText}>Mudar para: Devolvido</Text>
-            </TouchableOpacity>
-
-            {(selecionadoEstaAtrasado || (aluguerSelecionado?.valor_multa && aluguerSelecionado.valor_multa > 0)) ? (
-              <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#fee2e2', borderColor: '#fca5a5', marginTop: 10 }]} onPress={() => { setModalOpcoesVisible(false); abrirModalMulta(aluguerSelecionado); }}>
-                <Text style={[styles.btnMenuText, { color: '#dc2626', fontWeight: 'bold' }]}>💰 Gerir Multa por Atraso</Text>
+            <Text style={styles.sectionTitleOpcoes}>Alterar Status</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 15 }}>
+              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Pendente' }); setModalOpcoesVisible(false); }}>
+                <Text style={styles.btnMenuText}>Pendente</Text>
               </TouchableOpacity>
-            ) : null}
+              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Entregue' }); setModalOpcoesVisible(false); }}>
+                <Text style={styles.btnMenuText}>Entregue</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Devolvido' }); setModalOpcoesVisible(false); }}>
+                <Text style={styles.btnMenuText}>Devolvido</Text>
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#fef2f2', borderColor: '#fecaca', marginTop: 15 }]} onPress={() => { setModalOpcoesVisible(false); if(aluguerSelecionado?.id) confirmarExclusao(aluguerSelecionado.id); }}>
-              <Text style={[styles.btnMenuText, { color: '#dc2626' }]}>🗑️ Excluir Aluguer</Text>
+            {(selecionadoEstaAtrasado || (aluguerSelecionado?.valor_multa && aluguerSelecionado.valor_multa > 0)) && (
+              <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#fee2e2', borderColor: '#fca5a5', marginBottom: 15 }]} onPress={() => { setModalOpcoesVisible(false); abrirModalMulta(aluguerSelecionado); }}>
+                <Text style={[styles.btnMenuText, { color: '#dc2626', fontWeight: 'bold' }]}>💰 Aplicar/Receber Multa</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#fef2f2', borderColor: '#fecaca', marginTop: 10 }]} onPress={() => { setModalOpcoesVisible(false); if(aluguerSelecionado?.id) confirmarExclusao(aluguerSelecionado.id); }}>
+              <Text style={[styles.btnMenuText, { color: '#dc2626' }]}>🗑️ Cancelar / Excluir</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => setModalOpcoesVisible(false)} style={{ marginTop: 15, padding: 10 }}>
-              <Text style={{ color: '#6b7280', textAlign: 'center', fontWeight: 'bold' }}>Voltar / Fechar</Text>
+            <TouchableOpacity onPress={() => setModalOpcoesVisible(false)} style={{ marginTop: 20, padding: 10 }}>
+              <Text style={{ color: '#6b7280', textAlign: 'center', fontWeight: 'bold', fontSize: 16 }}>Fechar Menu</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
       <Modal visible={modalMultaVisible} transparent animationType="fade">
-        <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Gerir Multa de Atraso</Text>
-            <Text style={{marginBottom: 10, color: '#6b7280'}}>Cliente: {aluguerSelecionado?.cliente_nome}</Text>
+        <View style={styles.modalBgCenter}>
+          <View style={styles.modalContentCenter}>
+            <Text style={styles.modalTitleCenter}>Gerenciar Multa</Text>
+            <Text style={{marginBottom: 16, color: '#6b7280', textAlign: 'center'}}>{aluguerSelecionado?.cliente_nome}</Text>
 
-            <TextInput 
-              style={styles.input} 
-              placeholder="Valor da Multa (R$)" 
-              keyboardType="numeric" 
-              value={valorMulta} 
-              onChangeText={(t) => setValorMulta(t.replace(/\D/g, '').replace(/(\d)(\d{2})$/, '$1,$2'))} 
-            />
-
+            <TextInput style={styles.inputCenter} placeholder="Valor da Multa (R$)" keyboardType="numeric" value={valorMulta} onChangeText={(t) => setValorMulta(t.replace(/\D/g, '').replace(/(\d)(\d{2})$/, '$1,$2'))} />
             <View style={styles.pickerContainer}>
               <Picker selectedValue={statusMulta} onValueChange={setStatusMulta} style={{height: 50}}>
                 <Picker.Item label="Pendente (Por Receber)" value="Pendente" />
-                <Picker.Item label="Recebida" value="Recebida" />
+                <Picker.Item label="Recebida no Caixa" value="Recebida" />
                 <Picker.Item label="Cancelada / Perdoada" value="Cancelada" />
               </Picker>
             </View>
 
-            <TouchableOpacity style={styles.btnSalvar} onPress={salvarMulta}>
-              <Text style={{color: '#fff', fontWeight: 'bold'}}>Atualizar Multa</Text>
+            <TouchableOpacity style={styles.btnSalvarCenter} onPress={salvarMulta}>
+              <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 16}}>Salvar Multa</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalMultaVisible(false)} style={{marginTop: 15}}>
-              <Text style={{color: 'red', textAlign: 'center'}}>Cancelar</Text>
+            <TouchableOpacity onPress={() => setModalMultaVisible(false)} style={{marginTop: 15, padding: 10}}>
+              <Text style={{color: '#ef4444', textAlign: 'center', fontWeight: 'bold'}}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -272,15 +260,23 @@ const styles = StyleSheet.create({
   tabButtonActive: { backgroundColor: '#ea580c' },
   tabText: { fontSize: 14, fontWeight: '600', color: '#6b7280' },
   tabTextActive: { color: '#fff' },
-  emptyText: { textAlign: 'center', color: '#9ca3af', marginTop: 12, fontSize: 16 },
+  emptyText: { textAlign: 'center', color: '#9ca3af', marginTop: 40, fontSize: 16 },
   
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#fff', padding: 20, borderRadius: 15 },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
-  input: { borderBottomWidth: 1, borderColor: '#ddd', padding: 12, marginBottom: 15, fontSize: 16 },
-  pickerContainer: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, marginBottom: 15 },
-  btnSalvar: { backgroundColor: '#ea580c', padding: 15, borderRadius: 10, alignItems: 'center' },
-  
-  btnMenu: { borderWidth: 1, borderColor: '#e5e7eb', padding: 14, borderRadius: 8, marginBottom: 8, alignItems: 'center', backgroundColor: '#f9fafb' },
-  btnMenuText: { fontSize: 16, color: '#111827', fontWeight: '500' },
+  // MODAL DE BAIXO (OPÇÕES)
+  modalBgBottom: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContentBottom: { backgroundColor: '#fff', padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 40 },
+  modalDragHandle: { width: 40, height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, alignSelf: 'center', marginBottom: 20 },
+  modalTitleOpcoes: { fontSize: 20, fontWeight: 'bold', color: '#111827', textAlign: 'center' },
+  modalSubOpcoes: { fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 24, marginTop: 4 },
+  sectionTitleOpcoes: { fontSize: 12, fontWeight: 'bold', color: '#9ca3af', textTransform: 'uppercase', marginBottom: 12, marginTop: 10 },
+  btnMenu: { borderWidth: 1, borderColor: '#e5e7eb', padding: 14, borderRadius: 12, alignItems: 'center', backgroundColor: '#f9fafb' },
+  btnMenuText: { fontSize: 15, color: '#374151', fontWeight: '600' },
+
+  // MODAL DE CENTRO (MULTA)
+  modalBgCenter: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', padding: 20 },
+  modalContentCenter: { backgroundColor: '#fff', padding: 24, borderRadius: 20 },
+  modalTitleCenter: { fontSize: 20, fontWeight: 'bold', textAlign: 'center', color: '#111827' },
+  inputCenter: { borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb', padding: 14, borderRadius: 12, marginBottom: 15, fontSize: 16, textAlign: 'center' },
+  pickerContainer: { borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: '#f9fafb', borderRadius: 12, marginBottom: 20, overflow: 'hidden' },
+  btnSalvarCenter: { backgroundColor: '#ea580c', padding: 16, borderRadius: 12, alignItems: 'center' },
 });
