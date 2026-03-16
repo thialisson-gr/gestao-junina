@@ -109,7 +109,7 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
             ) : (
               <View style={[styles.linhaFinanceira, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#bbf7d0' }]}>
                 <Text style={[styles.textoFinLabel, { color: '#15803d', fontWeight: 'bold' }]}>Status do Pagamento:</Text>
-                <Text style={[styles.textoFinValor, { color: '#15803d', fontWeight: 'bold' }]}>✅ Totalmente Quitado</Text>
+                <Text style={[styles.textoFinValor, { color: '#15803d', fontWeight: 'bold' }]}>✅ Quitado</Text>
               </View>
             )}
 

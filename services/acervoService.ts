@@ -1,6 +1,5 @@
 import {
   addDoc,
-  collection,
   deleteDoc,
   doc,
   getFirestore,
@@ -9,20 +8,10 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { appId } from "../firebaseConfig";
-
-const getRef = () =>
-  collection(
-    getFirestore(),
-    "artifacts",
-    String(appId || "gestao-junina-loja"),
-    "public",
-    "data",
-    "kits",
-  );
+import { GAVETAS, getGaveta } from "../firebaseConfig"; // 👈 Importamos o GPS
 
 export const escutarKits = (callback: any, errorCallback: any) => {
-  const q = query(getRef());
+  const q = query(getGaveta(GAVETAS.ACERVO)); // 👈 Usamos a gaveta 'kits'
   return onSnapshot(
     q,
     (snapshot: any) => {
@@ -37,8 +26,16 @@ export const escutarKits = (callback: any, errorCallback: any) => {
 };
 
 export const adicionarKit = async (dados: any) =>
-  await addDoc(getRef(), { ...dados, criado_em: serverTimestamp() });
+  await addDoc(getGaveta(GAVETAS.ACERVO), {
+    ...dados,
+    criado_em: serverTimestamp(),
+  });
+
 export const atualizarKit = async (id: string, dados: any) =>
-  await updateDoc(doc(getFirestore(), getRef().path, id), dados);
+  await updateDoc(
+    doc(getFirestore(), getGaveta(GAVETAS.ACERVO).path, id),
+    dados,
+  );
+
 export const excluirKit = async (id: string) =>
-  await deleteDoc(doc(getFirestore(), getRef().path, id));
+  await deleteDoc(doc(getFirestore(), getGaveta(GAVETAS.ACERVO).path, id));

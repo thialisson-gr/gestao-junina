@@ -95,8 +95,8 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
 
   const kitsFiltrados = kits.filter(k => {
     if (!k) return false;
-    const statusPeca = k.status_interno || 'Disponível';
-    if (statusPeca !== 'Disponível') return false; 
+    const statusPeca = k.status_interno || 'Ativo';
+    if (statusPeca !== 'Ativo') return false;
     if (filtroSecao) {
       const isAcessorio = k.categoria === 'Acessório' || k.categoria === 'Acessorio' || k.tipo === 'Acessório';
       if (filtroSecao === 'Acessorio') { if (!isAcessorio) return false; } 

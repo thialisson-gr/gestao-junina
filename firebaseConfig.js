@@ -6,9 +6,7 @@ import {
   initializeAuth,
   signInAnonymously,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-
-// A LINHA MÁGICA QUE FALTAVA PARA RESOLVER O ERRO:
+import { collection, getFirestore } from "firebase/firestore";
 import { Platform } from "react-native";
 
 // As SUAS chaves verdadeiras copiadas do painel do Firebase
@@ -49,3 +47,32 @@ export const db = getFirestore(app);
 
 // 4. Exportar o App ID manualmente
 export const appId = "gestao-junina-loja";
+
+// 🔒 A LISTA OFICIAL DE GAVETAS (Constantes)
+// Se precisar de uma nova gaveta no futuro, adicione-a APENAS AQUI.
+export const GAVETAS = {
+  ACERVO: "kits",
+  AGENDA: "alugueres",
+  FINANCEIRO: "financeiro",
+  CLIENTES: "clientes",
+};
+
+// 👇 O NOSSO GPS CENTRAL BLINDADO 👇
+export const getGaveta = (nomeDaGaveta) => {
+  // 🚨 O Alarme: Se alguém tentar abrir uma gaveta que não existe na lista oficial, ele avisa!
+  const gavetasPermitidas = Object.values(GAVETAS);
+  if (!gavetasPermitidas.includes(nomeDaGaveta)) {
+    console.error(
+      `🚨 ERRO GRAVE: Tentativa de acessar a gaveta fantasma '${nomeDaGaveta}'. Verifique o nome!`,
+    );
+  }
+
+  return collection(
+    db,
+    "artifacts",
+    String(appId),
+    "public",
+    "data",
+    nomeDaGaveta,
+  );
+};

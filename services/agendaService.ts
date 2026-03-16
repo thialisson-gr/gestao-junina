@@ -1,6 +1,5 @@
 import {
   addDoc,
-  collection,
   deleteDoc,
   doc,
   getFirestore,
@@ -9,22 +8,12 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { appId } from "../firebaseConfig";
-
-const getRef = () => {
-  const db = getFirestore();
-  return collection(
-    db,
-    "artifacts",
-    String(appId || "gestao-junina-loja"),
-    "public",
-    "data",
-    "alugueres",
-  );
-};
+import { GAVETAS, getGaveta } from "../firebaseConfig";
 
 export const escutarAlugueres = (callback: any, errorCallback: any) => {
-  const q = query(getRef());
+  // Em vez de "alugueres", usamos a nossa variável constante e à prova de balas:
+  const q = query(getGaveta(GAVETAS.AGENDA));
+
   return onSnapshot(
     q,
     (snapshot: any) => {
@@ -39,21 +28,15 @@ export const escutarAlugueres = (callback: any, errorCallback: any) => {
 };
 
 export const adicionarAluguer = async (dados: any) => {
-  return await addDoc(getRef(), {
+  return await addDoc(getGaveta(GAVETAS.AGENDA), {
     ...dados,
     criado_em: serverTimestamp(),
     status: "Pendente",
   });
 };
 
-export const atualizarAluguer = async (id: string, dados: any) => {
-  const db = getFirestore();
-  const docRef = doc(db, getRef().path, id);
-  return await updateDoc(docRef, dados);
-};
+export const atualizarAluguer = async (id: string, dados: any) =>
+  await updateDoc(doc(getFirestore(), getGaveta("alugueres").path, id), dados);
 
-export const excluirAluguer = async (id: string) => {
-  const db = getFirestore();
-  const docRef = doc(db, getRef().path, id);
-  return await deleteDoc(docRef);
-};
+export const excluirAluguer = async (id: string) =>
+  await deleteDoc(doc(getFirestore(), getGaveta("alugueres").path, id));

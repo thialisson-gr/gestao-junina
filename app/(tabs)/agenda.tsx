@@ -18,7 +18,6 @@ export default function AgendaScreen() {
   const [loading, setLoading] = useState(true);
   
   const [modalVisible, setModalVisible] = useState(false);
-  // 👇 NOVO ESTADO: Controla qual aluguer vai para o Modal de Edição
   const [aluguerParaEditar, setAluguerParaEditar] = useState<any>(null);
 
   const [abaAtiva, setAbaAtiva] = useState('Todos');
@@ -101,16 +100,48 @@ export default function AgendaScreen() {
       .catch(err => console.error('Ocorreu um erro ao abrir o WhatsApp', err));
   };
 
-  const alugueresFiltrados = (alugueres || []).filter(item => {
-    if (!item || !item?.id) return false;
-    const hoje = new Date();
-    hoje.setHours(0,0,0,0);
-    const estaAtrasado = item.status !== 'Devolvido' && item.data_devolucao && parseDataBR(item.data_devolucao) < hoje;
+  // 👇 NOVA FUNÇÃO: Mensagem automática de responsabilidade na entrega
+  const enviarMensagemCuidados = (aluguer: any) => {
+    const telefone = aluguer?.cliente_telefone;
+    if (!telefone) return;
 
-    if (abaAtiva === 'Todos') return true;
-    if (abaAtiva === 'Atrasado') return estaAtrasado;
-    return item.status === abaAtiva;
-  });
+    Alert.alert(
+      "Peça Entregue! ✅",
+      "Deseja enviar a mensagem de cuidados e regras para o WhatsApp do cliente agora?",
+      [
+        { text: "Não", style: "cancel" },
+        { text: "Sim, Enviar", onPress: () => {
+            let numeroLimpo = telefone.replace(/\D/g, '');
+            if (numeroLimpo.length <= 11) { numeroLimpo = `55${numeroLimpo}`; }
+            
+            const mensagem = `Olá ${aluguer.cliente_nome}! \n\nConfirmamos a entrega do item: \n*${aluguer.kit_nome}* para o seu evento. 🎉\n\nLembramos que a peça está sob a sua responsabilidade. Pedimos muito cuidado com manchas, rasgos ou queimaduras para evitarmos a cobrança de multas, combinado? 😉\n\nA sua devolução está marcada para o dia *${aluguer.data_devolucao}*. Bom evento! 🌵✨`;
+            
+            const url = `whatsapp://send?phone=${numeroLimpo}&text=${encodeURIComponent(mensagem)}`;
+            Linking.openURL(url).catch(() => Alert.alert("Erro", "Não foi possível abrir o WhatsApp."));
+        }}
+      ]
+    );
+  };
+
+  const alugueresFiltrados = (alugueres || [])
+    .filter(item => {
+      if (!item || !item?.id) return false;
+      const hoje = new Date();
+      hoje.setHours(0,0,0,0);
+      const estaAtrasado = item.status !== 'Devolvido' && item.data_devolucao && parseDataBR(item.data_devolucao) < hoje;
+
+      if (abaAtiva === 'Todos') return true;
+      if (abaAtiva === 'Atrasado') return estaAtrasado;
+      return item.status === abaAtiva;
+    })
+    .sort((a, b) => {
+      // 👇 ORDENAÇÃO: Coloca os mais recentes no topo
+      // O Firebase pode guardar a data como Timestamp ou texto (ISO), por isso tratamos os dois casos
+      const tempoA = a.criado_em?.seconds ? a.criado_em.seconds * 1000 : new Date(a.criado_em || 0).getTime();
+      const tempoB = b.criado_em?.seconds ? b.criado_em.seconds * 1000 : new Date(b.criado_em || 0).getTime();
+      
+      return tempoB - tempoA; // Do maior (mais recente) para o menor (mais antigo)
+    });
 
   const hoje = new Date();
   hoje.setHours(0,0,0,0);
@@ -196,10 +227,27 @@ export default function AgendaScreen() {
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Pendente' }); setModalOpcoesVisible(false); }}>
                 <Text style={styles.btnMenuText}>Pendente</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Entregue' }); setModalOpcoesVisible(false); }}>
+              
+              {/* 👇 ALTERAÇÃO AQUI: Aciona a mensagem ao marcar como Entregue */}
+              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
+                if(aluguerSelecionado?.id) {
+                  atualizarAluguer(aluguerSelecionado.id, { status: 'Entregue' }); 
+                  setModalOpcoesVisible(false);
+                  enviarMensagemCuidados(aluguerSelecionado);
+                }
+              }}>
                 <Text style={styles.btnMenuText}>Entregue</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Devolvido' }); setModalOpcoesVisible(false); }}>
+
+              {/* 👇 ALTERAÇÃO AQUI: Bloqueia devolução se estiver Pendente */}
+              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
+                if (aluguerSelecionado?.status === 'Pendente') {
+                  Alert.alert("Ação Inválida 🚫", "Não pode marcar como 'Devolvido' uma peça que ainda está como 'Pendente'. Marque como 'Entregue' primeiro.");
+                  return;
+                }
+                if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Devolvido' }); 
+                setModalOpcoesVisible(false); 
+              }}>
                 <Text style={styles.btnMenuText}>Devolvido</Text>
               </TouchableOpacity>
             </View>
