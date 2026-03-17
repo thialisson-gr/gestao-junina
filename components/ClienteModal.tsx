@@ -9,7 +9,6 @@ export default function ClienteModal({ visible, onClose, onSave, clienteParaEdit
   const [alunoNome, setAlunoNome] = useState('');
   const [alunoEscola, setAlunoEscola] = useState('');
 
-  // Preenche os dados quando abrimos para Editar
   useEffect(() => {
     if (visible) {
       if (clienteParaEditar) {
@@ -28,9 +27,8 @@ export default function ClienteModal({ visible, onClose, onSave, clienteParaEdit
     }
   }, [visible, clienteParaEditar]);
 
-  // 👇 MÁSCARA DE TELEFONE: Formata como (99) 9 9999-9999 enquanto digita
   const handleTelefoneChange = (texto: string) => {
-    let limpo = texto.replace(/\D/g, '').substring(0, 11); // Tira letras, limita a 11 números
+    let limpo = texto.replace(/\D/g, '').substring(0, 11); 
     
     let formatado = limpo;
     if (limpo.length > 2) {
@@ -47,7 +45,6 @@ export default function ClienteModal({ visible, onClose, onSave, clienteParaEdit
   };
 
   const handleSalvar = () => {
-    // 👇 VALIDAÇÃO: Agora TUDO é obrigatório!
     if (!responsavelNome || !responsavelWhatsapp || !endereco || !alunoNome || !alunoEscola) {
       Alert.alert("Atenção", "Por favor, preencha todos os campos obrigatórios (*).");
       return;
@@ -101,7 +98,6 @@ export default function ClienteModal({ visible, onClose, onSave, clienteParaEdit
             <Text style={styles.label}>Escola *</Text>
             <TextInput style={styles.input} value={alunoEscola} onChangeText={setAlunoEscola} placeholder="Ex: Escola Frei Damião" />
 
-            {/* 👇 TEXTO DO BOTÃO ALTERADO */}
             <TouchableOpacity style={styles.saveButton} onPress={handleSalvar}>
               <Text style={styles.saveButtonText}>
                 {clienteParaEditar ? 'Atualizar Cadastro' : 'Salvar Cadastro'}
