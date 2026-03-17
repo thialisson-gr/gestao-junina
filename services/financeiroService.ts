@@ -1,17 +1,17 @@
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    query,
+  addDoc,
+  deleteDoc,
+  doc,
+  getFirestore,
+  onSnapshot,
+  query,
 } from "firebase/firestore";
-import { db } from "../firebaseConfig";
+import { GAVETAS, getGaveta } from "../firebaseConfig";
 
 // Adicionar uma nova retirada
 export const adicionarDespesa = async (dados: any) => {
   try {
-    const docRef = await addDoc(collection(db, "despesas"), dados);
+    const docRef = await addDoc(getGaveta(GAVETAS.DESPESAS), dados);
     return docRef.id;
   } catch (error) {
     console.error("Erro ao adicionar despesa:", error);
@@ -24,7 +24,7 @@ export const escutarDespesas = (
   callback: (dados: any[]) => void,
   errorCallback: (erro: any) => void,
 ) => {
-  const q = query(collection(db, "despesas"));
+  const q = query(getGaveta(GAVETAS.DESPESAS));
 
   const unsubscribe = onSnapshot(
     q,
@@ -43,10 +43,11 @@ export const escutarDespesas = (
   return unsubscribe;
 };
 
-// Excluir uma retirada (caso tenha registado por engano)
+// Excluir uma retirada
 export const excluirDespesa = async (id: string) => {
   try {
-    await deleteDoc(doc(db, "despesas", id));
+    const db = getFirestore();
+    await deleteDoc(doc(db, getGaveta(GAVETAS.DESPESAS).path, id));
   } catch (error) {
     console.error("Erro ao excluir despesa:", error);
     throw error;

@@ -41,7 +41,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   const [showPickerDevolucao, setShowPickerDevolucao] = useState(false);
 
   const [valorAluguel, setValorAluguel] = useState('');
-  const [valorPago, setValorPago] = useState('');
   const [formaPagamento, setFormaPagamento] = useState('');
   const [medidasCostureira, setMedidasCostureira] = useState('');
 
@@ -53,7 +52,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
       setDataRetirada(aluguerParaEditar.data_retirada || '');
       setDataDevolucao(aluguerParaEditar.data_devolucao || '');
       setValorAluguel(aluguerParaEditar.valor_aluguel ? String(aluguerParaEditar.valor_aluguel.toFixed(2)).replace('.', ',') : '');
-      setValorPago(aluguerParaEditar.valor_pago ? String(aluguerParaEditar.valor_pago.toFixed(2)).replace('.', ',') : '');
       setFormaPagamento(aluguerParaEditar.forma_pagamento || '');
       setMedidasCostureira(aluguerParaEditar.medidas_costureira || '');
     } else if (visible && !aluguerParaEditar) {
@@ -79,7 +77,7 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   const limparFormulario = () => {
     setClienteId(''); setBuscaCliente(''); setMostrarListaClientes(false);
     setKitId(''); setDataRetirada(''); setDataDevolucao('');
-    setValorAluguel(''); setValorPago(''); setFormaPagamento(''); 
+    setValorAluguel(''); setFormaPagamento(''); 
     setFiltroSecao(''); setFiltroGenero('Todos'); setMedidasCostureira('');
   };
 
@@ -112,8 +110,8 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
 
   const confirmar = () => {
     // 👇 NOVA VALIDAÇÃO: Tudo obrigatório, exceto as medidas da costureira
-    if (!clienteId || !kitId || !dataRetirada || !dataDevolucao || !valorAluguel || !valorPago || !formaPagamento) {
-      Alert.alert("Atenção", "Por favor, preencha todos os campos obrigatórios (*). Se não houve pagamento antecipado, coloque 0 no Valor Pago e escolha a Forma de Pagamento que será usada.");
+    if (!clienteId || !kitId || !dataRetirada || !dataDevolucao || !valorAluguel || !formaPagamento) {
+      Alert.alert("Atenção", "Por favor, preencha todos os campos obrigatórios (*).");
       return;
     }
 
@@ -135,7 +133,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
     const c = clientes.find(item => item && item.id === clienteId);
     const k = kits.find(item => item && item.id === kitId);
     const numAluguel = Number(valorAluguel.replace(/\./g, '').replace(',', '.'));
-    const numPago = Number(valorPago.replace(/\./g, '').replace(',', '.'));
 
     const dadosParaSalvar: any = {
       cliente_id: clienteId,
@@ -147,7 +144,7 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
       data_devolucao: dataDevolucao,
       status: aluguerParaEditar?.status || 'Pendente',
       valor_aluguel: numAluguel || 0,
-      valor_pago: numPago || 0,
+      valor_pago: numAluguel || 0, // 👈 O SEGREDO: O sistema agora diz automaticamente que o valor pago é o total!
       forma_pagamento: formaPagamento,
       valor_multa: aluguerParaEditar?.valor_multa || 0,
       status_multa: aluguerParaEditar?.status_multa || 'Sem Multa',
@@ -280,12 +277,15 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                 onChangeText={setMedidasCostureira} 
               />
 
-              <Text style={styles.sectionTitle}>5. Valores (R$) e Pagamento *</Text>
-              
-              <View style={styles.row}>
-                <TextInput style={[styles.input, {flex: 1, marginRight: 8}]} placeholder="Valor Total *" keyboardType="numeric" value={valorAluguel} onChangeText={(t) => setValorAluguel(formatarMoeda(t))} />
-                <TextInput style={[styles.input, {flex: 1, marginLeft: 8}]} placeholder="Valor Pago *" keyboardType="numeric" value={valorPago} onChangeText={(t) => setValorPago(formatarMoeda(t))} />
-              </View>
+              <Text style={styles.sectionTitle}>5. Valor (R$) e Pagamento *</Text>
+
+              <TextInput 
+                style={[styles.input, { marginBottom: 12 }]} 
+                placeholder="Valor Total do Aluguel *" 
+                keyboardType="numeric" 
+                value={valorAluguel} 
+                onChangeText={(t) => setValorAluguel(formatarMoeda(t))} 
+              />
 
               <View style={styles.pickerContainer}>
                 <Picker selectedValue={formaPagamento} onValueChange={setFormaPagamento} style={styles.picker}>

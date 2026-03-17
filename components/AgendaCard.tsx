@@ -13,7 +13,6 @@ const formatarMoeda = (valor: number) => {
 };
 
 export default function AgendaCard({ item, onPressOpcoes }: any) {
-  // 👇 Estado que controla se o cartão está aberto ou fechado
   const [expandido, setExpandido] = useState(false);
 
   if (!item) return null;
@@ -74,6 +73,21 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
               <Text style={[styles.badgeText, { color: '#9333ea' }]}>✂️ AJUSTES</Text>
             </View>
           )}
+
+          {/* 👇 BADGE DE MULTA VISÍVEL LOGO POR FORA */}
+          {item.valor_multa > 0 && (
+            <View style={[styles.badge, 
+              item.status_multa === 'Recebida' ? { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' } :
+              item.status_multa === 'Cancelada' ? { backgroundColor: '#f3f4f6', borderColor: '#e5e7eb' } :
+              { backgroundColor: '#fee2e2', borderColor: '#fecaca' }
+            ]}>
+              <Text style={[styles.badgeText, 
+                item.status_multa === 'Recebida' ? { color: '#166534' } :
+                item.status_multa === 'Cancelada' ? { color: '#4b5563', textDecorationLine: 'line-through' } :
+                { color: '#991b1b' }
+              ]}>💰 MULTA {item.status_multa === 'Pendente' ? 'POR PAGAR' : item.status_multa.toUpperCase()}</Text>
+            </View>
+          )}
         </View>
 
         <Text style={styles.datasTexto}>
@@ -97,7 +111,7 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
             </View>
             
             <View style={styles.linhaFinanceira}>
-              <Text style={styles.textoFinLabel}>Sinal / Pago:</Text>
+              <Text style={styles.textoFinLabel}>Pago:</Text>
               <Text style={styles.textoFinValor}>{formatarMoeda(valorPago)}</Text>
             </View>
 
@@ -113,7 +127,7 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
               </View>
             )}
 
-            {/* MULTAS (Só mostra se houver) */}
+            {/* 👇 BLOCO DETALHADO DA MULTA POR DENTRO */}
             {item.valor_multa > 0 && (
               <View style={[styles.alertaMulta, 
                 item.status_multa === 'Recebida' ? { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' } :
@@ -131,7 +145,7 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
             )}
           </View>
 
-          {/* BLOCO COSTUREIRA (Só mostra se houver anotações) */}
+          {/* BLOCO COSTUREIRA */}
           {item.medidas_costureira && item.medidas_costureira.trim() !== '' && (
             <View style={[styles.blocoDetalhe, { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' }]}>
               <Text style={[styles.tituloDetalhe, { color: '#7e22ce' }]}>Anotações para Costureira</Text>
@@ -139,7 +153,7 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
             </View>
           )}
 
-          {/* BOTÃO PARA ABRIR O MENU DE OPÇÕES (Mudar Status, WhatsApp, Editar, etc) */}
+          {/* BOTÃO PARA GERIR */}
           <TouchableOpacity style={styles.btnGerir} onPress={onPressOpcoes}>
             <Feather name="settings" size={18} color="#fff" />
             <Text style={styles.btnGerirText}>Gerir este Aluguel</Text>
@@ -192,6 +206,7 @@ const styles = StyleSheet.create({
   },
   infoBadgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap', // Permite que os badges desçam de linha se houver muitos
     gap: 8,
     marginBottom: 10,
   },
@@ -269,7 +284,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111827', // Fundo bem escuro e profissional
+    backgroundColor: '#111827',
     paddingVertical: 14,
     borderRadius: 12,
     gap: 8,

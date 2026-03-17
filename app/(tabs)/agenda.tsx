@@ -62,10 +62,18 @@ export default function AgendaScreen() {
   const salvarMulta = async () => {
     if(!aluguerSelecionado?.id) return;
     const numMulta = Number(valorMulta.replace(/\D/g, '')) / 100; 
-    await atualizarAluguer(aluguerSelecionado.id, {
+    
+    const dadosAtualizados: any = {
       valor_multa: numMulta || 0,
       status_multa: statusMulta
-    });
+    };
+
+    // 👇 O CARIMBO DO CAIXA: Se marcou como recebida agora, guarda a data de hoje!
+    if (statusMulta === 'Recebida' && aluguerSelecionado.status_multa !== 'Recebida') {
+      dadosAtualizados.data_recebimento_multa = new Date().toISOString();
+    }
+
+    await atualizarAluguer(aluguerSelecionado.id, dadosAtualizados);
     setModalMultaVisible(false);
   };
 
@@ -224,12 +232,25 @@ export default function AgendaScreen() {
 
             <Text style={styles.sectionTitleOpcoes}>Alterar Status</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 15 }}>
-              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Pendente' }); setModalOpcoesVisible(false); }}>
+              
+              {/* 👇 TRAVA DE ATRASO: Pendente */}
+              <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
+                if (selecionadoEstaAtrasado) {
+                  Alert.alert("Ação Inválida 🚫", "Esta peça já está Atrasada. Não é possível voltar o status para 'Pendente'.");
+                  return;
+                }
+                if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Pendente' }); 
+                setModalOpcoesVisible(false); 
+              }}>
                 <Text style={styles.btnMenuText}>Pendente</Text>
               </TouchableOpacity>
               
-              {/* 👇 ALTERAÇÃO AQUI: Aciona a mensagem ao marcar como Entregue */}
+              {/* 👇 TRAVA DE ATRASO: Entregue */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
+                if (selecionadoEstaAtrasado) {
+                  Alert.alert("Ação Inválida 🚫", "Esta peça já está Atrasada. A única ação possível agora é marcar como 'Devolvido' e cobrar a multa.");
+                  return;
+                }
                 if(aluguerSelecionado?.id) {
                   atualizarAluguer(aluguerSelecionado.id, { status: 'Entregue' }); 
                   setModalOpcoesVisible(false);
@@ -239,7 +260,7 @@ export default function AgendaScreen() {
                 <Text style={styles.btnMenuText}>Entregue</Text>
               </TouchableOpacity>
 
-              {/* 👇 ALTERAÇÃO AQUI: Bloqueia devolução se estiver Pendente */}
+              {/* 👇 TRAVA DE PENDENTE: Devolvido */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
                 if (aluguerSelecionado?.status === 'Pendente') {
                   Alert.alert("Ação Inválida 🚫", "Não pode marcar como 'Devolvido' uma peça que ainda está como 'Pendente'. Marque como 'Entregue' primeiro.");

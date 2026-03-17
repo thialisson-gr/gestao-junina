@@ -55,6 +55,7 @@ export const GAVETAS = {
   AGENDA: "alugueres",
   FINANCEIRO: "financeiro",
   CLIENTES: "clientes",
+  DESPESAS: "despesas",
 };
 
 // 👇 O NOSSO GPS CENTRAL BLINDADO 👇

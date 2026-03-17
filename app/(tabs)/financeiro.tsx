@@ -79,11 +79,11 @@ export default function FinanceiroScreen() {
   let totalDinheiro = 0;
   let totalCartao = 0;
   let totalMultasArrecadadas = 0;
-  let totalRetiradas = 0; // 👈 Novo total
+  let totalRetiradas = 0;
   
   let caixaPorOperador: any = {};
   let alertasDeCaixa: any[] = [];
-  let retiradasDoDia: any[] = []; // 👈 Lista de despesas de hoje
+  let retiradasDoDia: any[] = [];
 
   // 1. PROCESSAR AS ENTRADAS (Alugueres e Multas)
   alugueres.forEach(alug => {
@@ -93,11 +93,23 @@ export default function FinanceiroScreen() {
     const valorPago = Number(alug.valor_pago) || 0;
     const valorMulta = Number(alug.valor_multa) || 0;
     const forma = alug.forma_pagamento;
-    const operador = alug.atendente_nome || 'Usuário Não Identificado';
+    const operador = alug.entregue_por || alug.criado_por || 'Usuário Não Identificado';
 
     if (!caixaPorOperador[operador]) caixaPorOperador[operador] = { dinheiro: 0, pix: 0, cartao: 0, multas: 0, total: 0 };
 
-    if (alug.data_retirada === dataFiltroStr) {
+    // O SEGREDO DO REGIME DE CAIXA: Data real em que o dinheiro entrou
+    let dataEntradaCaixa = alug.data_retirada; // Plano B (para aluguéis antigos)
+    
+    // Se a peça já foi entregue, usamos o carimbo de tempo real da auditoria!
+    if (alug.data_entrega_real) {
+      const dataReal = new Date(alug.data_entrega_real);
+      dataEntradaCaixa = `${String(dataReal.getDate()).padStart(2, '0')}/${String(dataReal.getMonth() + 1).padStart(2, '0')}/${dataReal.getFullYear()}`;
+    }
+
+    // Apenas contabiliza o dinheiro no caixa se a roupa já saiu da loja (Entregue ou Devolvido)
+    const pagamentoConfirmado = alug.status === 'Entregue' || alug.status === 'Devolvido';
+
+    if (dataEntradaCaixa === dataFiltroStr && pagamentoConfirmado) {
       if (forma === 'Pix') { totalPix += valorPago; caixaPorOperador[operador].pix += valorPago; }
       else if (forma === 'Cartão') { totalCartao += valorPago; caixaPorOperador[operador].cartao += valorPago; }
       else { totalDinheiro += valorPago; caixaPorOperador[operador].dinheiro += valorPago; }
@@ -108,7 +120,21 @@ export default function FinanceiroScreen() {
       if (faltaPagar > 0) alertasDeCaixa.push({ ...alug, tipoAlerta: 'Falta Pagamento', valorAlerta: faltaPagar, operador, mensagem: `Deixou ${formatarMoeda(faltaPagar)} pendentes.` });
     }
 
-    if (alug.data_devolucao === dataFiltroStr) {
+    // 👇 AJUSTE AQUI: O mesmo regime de caixa para o recebimento de multas!
+    let dataMultaCaixa = alug.data_devolucao;
+    
+    // 1ª Prioridade: O dia em que a multa foi efetivamente paga (O botão Recebida foi clicado)
+    if (alug.data_recebimento_multa) {
+      const d = new Date(alug.data_recebimento_multa);
+      dataMultaCaixa = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    } 
+    // 2ª Prioridade: O dia em que a roupa foi devolvida (caso não tenha a data acima)
+    else if (alug.data_devolucao_real) {
+      const d = new Date(alug.data_devolucao_real);
+      dataMultaCaixa = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    }
+
+    if (dataMultaCaixa === dataFiltroStr) {
       if (alug.status_multa === 'Recebida') {
         totalMultasArrecadadas += valorMulta;
         caixaPorOperador[operador].multas += valorMulta;
@@ -127,7 +153,6 @@ export default function FinanceiroScreen() {
       totalRetiradas += valorSaida;
       retiradasDoDia.push(desp);
 
-      // Subtrai do lugar exato de onde o dinheiro saiu!
       if (desp.forma_pagamento === 'Pix') totalPix -= valorSaida;
       else if (desp.forma_pagamento === 'Cartão') totalCartao -= valorSaida;
       else totalDinheiro -= valorSaida; 
@@ -136,15 +161,14 @@ export default function FinanceiroScreen() {
 
   alertasDeCaixa.sort((a, b) => b.valorAlerta - a.valorAlerta);
   
-  const totalEntradas = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas + totalRetiradas; // Entradas brutas
-  const totalEmCaixa = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas; // O que realmente sobrou
+  const totalEntradas = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas + totalRetiradas; 
+  const totalEmCaixa = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12}}>
           <Text style={styles.headerTitle}>Fecho de Caixa</Text>
-          {/* 👇 BOTÃO NOVA RETIRADA */}
           <TouchableOpacity style={styles.btnNovaRetirada} onPress={() => setModalRetiradaVisible(true)}>
             <Feather name="minus-circle" size={16} color="#fff" />
             <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 12, marginLeft: 4}}>Retirada</Text>
@@ -171,7 +195,6 @@ export default function FinanceiroScreen() {
             <Text style={styles.resumoGeralTexto}>Saldo Líquido do Dia</Text>
             <Text style={styles.resumoGeralValor}>{formatarMoeda(totalEmCaixa)}</Text>
             
-            {/* Mostra um mini-resumo para não assustar se o valor for menor que as vendas */}
             <View style={{flexDirection: 'row', gap: 16, marginTop: 12, borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 12}}>
               <Text style={{color: '#dcfce7', fontSize: 12}}>Entradas: {formatarMoeda(totalEntradas)}</Text>
               <Text style={{color: '#fee2e2', fontSize: 12}}>Saídas: {formatarMoeda(totalRetiradas)}</Text>
@@ -192,9 +215,6 @@ export default function FinanceiroScreen() {
             </View>
           </View>
 
-          {/* ========================================== */}
-          {/* 👇 NOVA SECÇÃO: LISTA DE RETIRADAS DO DIA */}
-          {/* ========================================== */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>💸 Retiradas e Despesas</Text>
@@ -243,9 +263,6 @@ export default function FinanceiroScreen() {
         </ScrollView>
       )}
 
-      {/* ========================================== */}
-      {/* 👇 MODAL PARA ADICIONAR NOVA RETIRADA */}
-      {/* ========================================== */}
       <Modal visible={modalRetiradaVisible} transparent animationType="slide">
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>
