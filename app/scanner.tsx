@@ -2,7 +2,7 @@ import { Feather } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import AluguerModal from '../components/AluguerModal';
 import { escutarKits } from '../services/acervoService';
@@ -10,13 +10,17 @@ import { adicionarAluguer, atualizarAluguer, escutarAlugueres } from '../service
 
 export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
+  // 👇 Mudámos de `scanned` para `cameraPaused` para gerir melhor a câmara enquanto se mexe no ecrã
+  const [cameraPaused, setCameraPaused] = useState(false);
   const router = useRouter();
 
   const [kits, setKits] = useState<any[]>([]);
   const [alugueres, setAlugueres] = useState<any[]>([]); 
   
-  const [pecaEncontrada, setPecaEncontrada] = useState<any>(null);
+  // 👇 NOVO ESTADO: O "Carrinho de Compras" do Supermercado
+  const [carrinhoPecas, setCarrinhoPecas] = useState<any[]>([]);
+  
+  const [pecaEncontradaParaDevolucao, setPecaEncontradaParaDevolucao] = useState<any>(null);
   const [aluguerAtivo, setAluguerAtivo] = useState<any>(null); 
   
   const [modalAluguerVisible, setModalAluguerVisible] = useState(false);
@@ -52,25 +56,45 @@ export default function ScannerScreen() {
   }
 
   const handleBarCodeScanned = ({ data }: any) => {
-    setScanned(true);
+    setCameraPaused(true);
 
     const peca = kits.find(k => k?.id_etiqueta === data);
 
     if (peca) {
-      setPecaEncontrada(peca);
       const ativo = alugueres.find(a => a?.kit_id === peca?.id && a?.status !== 'Devolvido' && a?.status !== 'Cancelado');
-      setAluguerAtivo(ativo || null);
-
+      
+      if (ativo) {
+        // Se a peça lida estiver alugada a alguém, abre o modo de "Devolução/Recebimento a Jato"
+        setPecaEncontradaParaDevolucao(peca);
+        setAluguerAtivo(ativo);
+      } else {
+        // Se a peça lida estiver Livre, adiciona ao "Carrinho" de novo aluguel
+        const jaEstaNoCarrinho = carrinhoPecas.some(p => p.id === peca.id);
+        
+        if (!jaEstaNoCarrinho) {
+          // O nome formatado é importante para bater certo com o formato que o Modal espera
+          const nomeFormatado = `${peca.id_etiqueta ? '['+peca.id_etiqueta+'] ' : ''}${peca.personagem || peca.descricao || 'Sem nome'}`;
+          setCarrinhoPecas(prev => [...prev, { id: peca.id, nome: nomeFormatado }]);
+          // Avisa de forma suave e liberta a câmara logo a seguir
+          Alert.alert("Peça Adicionada!", `A peça #${peca.id_etiqueta} foi colocada na lista de aluguel.`, [{ text: "Ler Próxima", onPress: () => setCameraPaused(false) }]);
+        } else {
+          Alert.alert("Aviso", "Esta peça já está na sua lista de leitura.", [{ text: "Ok", onPress: () => setCameraPaused(false) }]);
+        }
+      }
     } else {
       Alert.alert(
         "Peça Não Encontrada 🕵️‍♂️",
         `A etiqueta "${data}" não está registada no seu acervo.`,
         [
-          { text: "Ler Outra Etiqueta", onPress: () => setScanned(false) },
+          { text: "Ler Outra Etiqueta", onPress: () => setCameraPaused(false) },
           { text: "Voltar ao Início", onPress: () => router.back(), style: "cancel" }
         ]
       );
     }
+  };
+
+  const removerDoCarrinho = (id: string) => {
+    setCarrinhoPecas(prev => prev.filter(p => p.id !== id));
   };
 
   const handleDevolucaoAJato = () => {
@@ -86,41 +110,27 @@ export default function ScannerScreen() {
           onPress: async () => {
             await atualizarAluguer(aluguerAtivo.id, { status: 'Devolvido' });
             Alert.alert("Sucesso! ✅", "Peça devolvida e libertada para novos alugueres.");
-            setPecaEncontrada(null);
+            setPecaEncontradaParaDevolucao(null);
             setAluguerAtivo(null);
-            setScanned(false);
+            setCameraPaused(false); // Liberta a câmara para ler mais
           }
         }
       ]
     );
   };
 
-  const handleRaioX = () => {
-    const historico = alugueres.filter(a => a?.kit_id === pecaEncontrada?.id);
-    const totalVezes = historico.length;
-    const ultimoCliente = historico.length > 0 ? historico[0]?.cliente_nome : 'Nunca alugada';
-
-    Alert.alert(
-      "Raio-X: " + (pecaEncontrada?.id_etiqueta || ''),
-      `👗 Coleção: ${pecaEncontrada?.ano_tema || 'N/A'}\n` +
-      `📦 Status Interno: ${pecaEncontrada?.status_interno || 'Disponível'}\n\n` +
-      `📊 Histórico:\n` +
-      `- Alugada ${totalVezes} vezes no total.\n` +
-      `- Último cliente: ${ultimoCliente}\n\n` +
-      `(Nota: No futuro, este botão vai abrir o ecrã completo de detalhes da peça no Acervo!)`,
-      [{ text: "Fechar", style: "cancel" }]
-    );
-  };
-
-  // 👇 Os pontos de interrogação garantem que não há falhas mesmo se o estado estiver a ser limpo
-  const isDisponivel = !aluguerAtivo && (!pecaEncontrada?.status_interno || pecaEncontrada?.status_interno === 'Disponível');
+  // 👇 Preparamos os dados falsos para injetar no Modal como se fosse um "Aluguel Para Editar"
+  // Isto é um truque genial para não termos de reescrever o código do Modal todo!
+  const mockAluguelParaOModal = carrinhoPecas.length > 0 ? {
+    kits_alugados: carrinhoPecas // Injeta a nossa lista lida diretamente na lista do Modal
+  } : null;
 
   return (
     <View style={styles.container}>
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        onBarcodeScanned={cameraPaused ? undefined : handleBarCodeScanned}
         barcodeScannerSettings={{ barcodeTypes: ["qr", "ean13", "ean8", "code128", "code39"] }}
       />
 
@@ -133,64 +143,38 @@ export default function ScannerScreen() {
           <View style={{width: 44}}></View>
         </View>
         
-        {pecaEncontrada ? (
+        {/* ========================================== */}
+        {/* CARTÃO DE DEVOLUÇÃO (Só aparece se ler uma peça alugada) */}
+        {/* ========================================== */}
+        {pecaEncontradaParaDevolucao && aluguerAtivo ? (
           <View style={styles.cartaoResultado}>
-            
             <View style={styles.cartaoHeader}>
-              <View style={[styles.statusBadge, { backgroundColor: aluguerAtivo ? '#fee2e2' : '#dcfce7' }]}>
-                <Text style={[styles.statusText, { color: aluguerAtivo ? '#dc2626' : '#16a34a' }]}>
-                  {aluguerAtivo ? 'ALUGADO' : 'LIVRE'}
-                </Text>
+              <View style={[styles.statusBadge, { backgroundColor: '#fee2e2' }]}>
+                <Text style={[styles.statusText, { color: '#dc2626' }]}>ALUGADO</Text>
               </View>
-              <Text style={styles.textoEtiqueta}>#{pecaEncontrada?.id_etiqueta}</Text>
+              <Text style={styles.textoEtiqueta}>#{pecaEncontradaParaDevolucao?.id_etiqueta}</Text>
             </View>
 
-            {/* 👇 Adicionámos o ?. antes de todas as propriedades para blindar o código */}
-            <Text style={styles.nomePeca}>{pecaEncontrada?.personagem || pecaEncontrada?.descricao || 'Peça sem nome'}</Text>
+            <Text style={styles.nomePeca}>{pecaEncontradaParaDevolucao?.personagem || pecaEncontradaParaDevolucao?.descricao || 'Peça sem nome'}</Text>
             
-            {aluguerAtivo && (
-              <View style={styles.infoAluguerBox}>
-                <Feather name="user" size={14} color="#b91c1c" />
-                <Text style={styles.infoAluguerTexto}>
-                  Com: <Text style={{fontWeight: 'bold'}}>{aluguerAtivo?.cliente_nome}</Text> {'\n'}
-                  Volta em: {aluguerAtivo?.data_devolucao}
-                </Text>
-              </View>
-            )}
-
-            {!aluguerAtivo && (
-              <>
-                <Text style={styles.detalhesPeca}>👗 Coleção: {pecaEncontrada?.ano_tema || pecaEncontrada?.tema || 'N/A'}</Text>
-                <Text style={styles.detalhesPeca}>📏 Tamanho: {pecaEncontrada?.tamanho || 'Único'}</Text>
-              </>
-            )}
+            <View style={styles.infoAluguerBox}>
+              <Feather name="user" size={14} color="#b91c1c" />
+              <Text style={styles.infoAluguerTexto}>
+                Com: <Text style={{fontWeight: 'bold'}}>{aluguerAtivo?.cliente_nome}</Text> {'\n'}
+                Volta em: {aluguerAtivo?.data_devolucao}
+              </Text>
+            </View>
 
             <View style={styles.cartaoAcoes}>
-              
-              <TouchableOpacity style={styles.btnRaioX} onPress={handleRaioX}>
-                <Feather name="search" size={20} color="#4b5563" />
+              <TouchableOpacity style={[styles.btnAcao, { backgroundColor: '#16a34a' }]} onPress={handleDevolucaoAJato}>
+                <Feather name="rotate-ccw" size={20} color="#fff" />
+                <Text style={styles.btnAcaoTexto}>Receber Peça</Text>
               </TouchableOpacity>
-
-              {isDisponivel && (
-                <TouchableOpacity style={[styles.btnAcao, { backgroundColor: '#ea580c' }]} onPress={() => setModalAluguerVisible(true)}>
-                  <Feather name="shopping-bag" size={20} color="#fff" />
-                  <Text style={styles.btnAcaoTexto}>Alugar</Text>
-                </TouchableOpacity>
-              )}
-
-              {aluguerAtivo && (
-                <TouchableOpacity style={[styles.btnAcao, { backgroundColor: '#16a34a' }]} onPress={handleDevolucaoAJato}>
-                  <Feather name="rotate-ccw" size={20} color="#fff" />
-                  <Text style={styles.btnAcaoTexto}>Receber Peça</Text>
-                </TouchableOpacity>
-              )}
-
             </View>
             
-            <TouchableOpacity onPress={() => { setPecaEncontrada(null); setScanned(false); }} style={{marginTop: 15, paddingVertical: 10}}>
+            <TouchableOpacity onPress={() => { setPecaEncontradaParaDevolucao(null); setAluguerAtivo(null); setCameraPaused(false); }} style={{marginTop: 15, paddingVertical: 10}}>
               <Text style={{textAlign: 'center', color: '#6b7280', fontWeight: 'bold'}}>Ler outra etiqueta</Text>
             </TouchableOpacity>
-
           </View>
         ) : (
           <View style={styles.miraExterna}>
@@ -198,24 +182,52 @@ export default function ScannerScreen() {
           </View>
         )}
 
+        {/* ========================================== */}
+        {/* CARRINHO DE PEÇAS LIDAS NO RODAPÉ */}
+        {/* ========================================== */}
         <View style={styles.rodape}>
-          <Text style={styles.instrucaoTexto}>
-            {pecaEncontrada ? "Ação rápida pronta!" : "Aponte a câmara para a etiqueta"}
-          </Text>
+          {!pecaEncontradaParaDevolucao && carrinhoPecas.length > 0 ? (
+            <View style={styles.carrinhoContainer}>
+              <Text style={styles.carrinhoTitulo}>Peças Lidas ({carrinhoPecas.length})</Text>
+              
+              <ScrollView style={{ maxHeight: 120, marginBottom: 12 }} showsVerticalScrollIndicator={false}>
+                {carrinhoPecas.map(p => (
+                  <View key={p.id} style={styles.carrinhoItem}>
+                    <Text style={styles.carrinhoItemNome} numberOfLines={1}>{p.nome}</Text>
+                    <TouchableOpacity onPress={() => removerDoCarrinho(p.id)} style={{ padding: 4 }}>
+                      <Feather name="x" size={16} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity style={styles.btnFinalizarCarrinho} onPress={() => { setCameraPaused(true); setModalAluguerVisible(true); }}>
+                <Feather name="shopping-bag" size={20} color="#fff" />
+                <Text style={styles.btnFinalizarTexto}>Avançar para Aluguel</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={styles.instrucaoTexto}>
+              {pecaEncontradaParaDevolucao ? "Ação rápida pronta!" : "Aponte a câmara para a etiqueta"}
+            </Text>
+          )}
         </View>
 
       </View>
 
       <AluguerModal 
         visible={modalAluguerVisible} 
-        kitInicialId={pecaEncontrada?.id} 
-        onClose={() => setModalAluguerVisible(false)} 
+        aluguerParaEditar={mockAluguelParaOModal} // 👈 Aqui entra o nosso truque!
+        onClose={() => {
+          setModalAluguerVisible(false);
+          setCameraPaused(false);
+        }} 
         onSave={async (d: any) => { 
           await adicionarAluguer(d);
           setModalAluguerVisible(false);
-          setPecaEncontrada(null);
-          setScanned(false);
-          Alert.alert("Sucesso! 🎉", "Aluguer registado.");
+          setCarrinhoPecas([]); // Esvazia o carrinho depois de alugar
+          setCameraPaused(false);
+          Alert.alert("Sucesso! 🎉", "Aluguel registado com todas as peças.");
         }} 
         alugueresExistentes={alugueres || []} 
       />
@@ -241,16 +253,22 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase' },
   textoEtiqueta: { fontSize: 14, color: '#6b7280', fontWeight: 'bold' },
   nomePeca: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 8 },
-  detalhesPeca: { fontSize: 14, color: '#4b5563', marginBottom: 4, fontWeight: '500' },
   
   infoAluguerBox: { flexDirection: 'row', backgroundColor: '#fef2f2', padding: 12, borderRadius: 8, marginTop: 4, marginBottom: 8, borderWidth: 1, borderColor: '#fecaca', alignItems: 'center', gap: 10 },
   infoAluguerTexto: { color: '#991b1b', fontSize: 14, flex: 1 },
 
   cartaoAcoes: { flexDirection: 'row', marginTop: 15, gap: 10 },
-  btnRaioX: { backgroundColor: '#f3f4f6', paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' },
   btnAcao: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 8 },
   btnAcaoTexto: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 
-  rodape: { padding: 30, paddingBottom: 50, alignItems: 'center' },
-  instrucaoTexto: { color: '#fff', fontSize: 16, textAlign: 'center', fontWeight: '500' }
+  rodape: { padding: 20, paddingBottom: 40 },
+  instrucaoTexto: { color: '#fff', fontSize: 16, textAlign: 'center', fontWeight: '500' },
+  
+  // 👇 ESTILOS DO NOVO CARRINHO
+  carrinhoContainer: { backgroundColor: '#fff', padding: 16, borderRadius: 20, width: '100%', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 8 },
+  carrinhoTitulo: { fontSize: 16, fontWeight: 'bold', color: '#111827', marginBottom: 12 },
+  carrinhoItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f9fafb', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#e5e7eb' },
+  carrinhoItemNome: { fontSize: 14, color: '#374151', flex: 1, fontWeight: '500' },
+  btnFinalizarCarrinho: { backgroundColor: '#ea580c', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 12, gap: 8 },
+  btnFinalizarTexto: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });

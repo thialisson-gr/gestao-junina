@@ -30,7 +30,10 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   
   const [filtroSecao, setFiltroSecao] = useState(''); 
   const [filtroGenero, setFiltroGenero] = useState('Todos'); 
-  const [kitId, setKitId] = useState(''); 
+  const [kitIdPicker, setKitIdPicker] = useState(''); 
+  
+  // 👇 NOVO ESTADO: Lista de Múltiplas Peças
+  const [kitsSelecionados, setKitsSelecionados] = useState<any[]>([]);
 
   const [dataRetirada, setDataRetirada] = useState('');
   const [dateObjectRetirada, setDateObjectRetirada] = useState(new Date());
@@ -48,7 +51,16 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
     if (visible && aluguerParaEditar) {
       setClienteId(aluguerParaEditar.cliente_id || '');
       setBuscaCliente(aluguerParaEditar.cliente_nome || '');
-      setKitId(aluguerParaEditar.kit_id || '');
+      
+      // 👇 RECUPERA A LISTA DE PEÇAS (Suporta o formato novo e o antigo)
+      if (aluguerParaEditar.kits_alugados && aluguerParaEditar.kits_alugados.length > 0) {
+        setKitsSelecionados(aluguerParaEditar.kits_alugados);
+      } else if (aluguerParaEditar.kit_id) {
+        setKitsSelecionados([{ id: aluguerParaEditar.kit_id, nome: aluguerParaEditar.kit_nome }]);
+      } else {
+        setKitsSelecionados([]);
+      }
+
       setDataRetirada(aluguerParaEditar.data_retirada || '');
       setDataDevolucao(aluguerParaEditar.data_devolucao || '');
       setValorAluguel(aluguerParaEditar.valor_aluguel ? String(aluguerParaEditar.valor_aluguel.toFixed(2)).replace('.', ',') : '');
@@ -57,10 +69,15 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
     } else if (visible && !aluguerParaEditar) {
       limparFormulario();
       if (kitInicialId) {
-        setKitId(kitInicialId);
+        // Se abriu pelo leitor de código de barras
+        const kEncontrado = kits.find(k => k.id === kitInicialId);
+        if (kEncontrado) {
+          const nomeKit = `${kEncontrado.id_etiqueta ? '['+kEncontrado.id_etiqueta+'] ' : ''}${kEncontrado.personagem || kEncontrado.descricao || 'Sem nome'}`;
+          setKitsSelecionados([{ id: kitInicialId, nome: nomeKit }]);
+        }
       }
     }
-  }, [visible, aluguerParaEditar, kitInicialId]);
+  }, [visible, aluguerParaEditar, kitInicialId, kits]);
 
   useEffect(() => {
     if (visible) {
@@ -71,12 +88,12 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
   }, [visible]);
 
   useEffect(() => { 
-    if(!aluguerParaEditar && !kitInicialId) setKitId(''); 
+    setKitIdPicker(''); 
   }, [filtroSecao, filtroGenero]);
 
   const limparFormulario = () => {
     setClienteId(''); setBuscaCliente(''); setMostrarListaClientes(false);
-    setKitId(''); setDataRetirada(''); setDataDevolucao('');
+    setKitIdPicker(''); setKitsSelecionados([]); setDataRetirada(''); setDataDevolucao('');
     setValorAluguel(''); setFormaPagamento(''); 
     setFiltroSecao(''); setFiltroGenero('Todos'); setMedidasCostureira('');
   };
@@ -95,6 +112,10 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
     if (!k) return false;
     const statusPeca = k.status_interno || 'Ativo';
     if (statusPeca !== 'Ativo') return false;
+    
+    // Esconde os que já estão na lista de selecionados
+    if (kitsSelecionados.some(selecionado => selecionado.id === k.id)) return false;
+
     if (filtroSecao) {
       const isAcessorio = k.categoria === 'Acessório' || k.categoria === 'Acessorio' || k.tipo === 'Acessório';
       if (filtroSecao === 'Acessorio') { if (!isAcessorio) return false; } 
@@ -108,43 +129,77 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
     return true;
   });
 
+  // 👇 NOVA FUNÇÃO: Adicionar à lista
+  const handleAdicionarKit = () => {
+    if (!kitIdPicker) return;
+    const k = kits.find(item => item.id === kitIdPicker);
+    if (k) {
+      const nomeKit = `${k.id_etiqueta ? '['+k.id_etiqueta+'] ' : ''}${k.personagem || k.descricao || 'Sem descrição'}`;
+      setKitsSelecionados(prev => [...prev, { id: k.id, nome: nomeKit }]);
+      setKitIdPicker('');
+    }
+  };
+
+  // 👇 NOVA FUNÇÃO: Remover da lista
+  const handleRemoverKit = (idParaRemover: string) => {
+    setKitsSelecionados(prev => prev.filter(k => k.id !== idParaRemover));
+  };
+
   const confirmar = () => {
-    // 👇 NOVA VALIDAÇÃO: Tudo obrigatório, exceto as medidas da costureira
-    if (!clienteId || !kitId || !dataRetirada || !dataDevolucao || !valorAluguel || !formaPagamento) {
-      Alert.alert("Atenção", "Por favor, preencha todos os campos obrigatórios (*).");
+    if (!clienteId || kitsSelecionados.length === 0 || !dataRetirada || !dataDevolucao || !valorAluguel || !formaPagamento) {
+      Alert.alert("Atenção", "Por favor, preencha todos os campos obrigatórios (*). Não se esqueça de adicionar pelo menos uma peça à lista.");
       return;
     }
 
-    const conflito = (alugueresExistentes || []).find((alug: any) => {
-      if (!alug || !alug.id) return false;
-      if (aluguerParaEditar && alug.id === aluguerParaEditar.id) return false;
-      if (alug.kit_id !== kitId) return false;
-      if (alug.status === 'Devolvido' || alug.status === 'Cancelado') return false; 
-      const inicioA = dateObjectRetirada; const fimA = dateObjectDevolucao;
-      const inicioB = parseDataBR(alug.data_retirada); const fimB = parseDataBR(alug.data_devolucao);
-      return (inicioA <= fimB && fimA >= inicioB);
-    });
+    // 👇 NOVO DETETIVE DE CONFLITOS (Verifica todas as peças da lista)
+    let conflitoEncontrado: any = null;
 
-    if (conflito) {
-      Alert.alert("Peça Indisponível! ⚠️", `Esta peça já está reservada para "${conflito.cliente_nome}" no período de ${conflito.data_retirada} até ${conflito.data_devolucao}.`);
+    for (const meuKit of kitsSelecionados) {
+      const conflito = (alugueresExistentes || []).find((alug: any) => {
+        if (!alug || !alug.id) return false;
+        if (aluguerParaEditar && alug.id === aluguerParaEditar.id) return false;
+        if (alug.status === 'Devolvido' || alug.status === 'Cancelado') return false; 
+        
+        // Verifica se o aluguel do banco contém este kit específico
+        const temAqueleKit = alug.kits_alugados?.some((k: any) => k.id === meuKit.id) || alug.kit_id === meuKit.id;
+        if (!temAqueleKit) return false;
+
+        const inicioA = dateObjectRetirada; const fimA = dateObjectDevolucao;
+        const inicioB = parseDataBR(alug.data_retirada); const fimB = parseDataBR(alug.data_devolucao);
+        return (inicioA <= fimB && fimA >= inicioB);
+      });
+
+      if (conflito) {
+        conflitoEncontrado = { pecaNome: meuKit.nome, ...conflito };
+        break; // Para o loop assim que achar um conflito
+      }
+    }
+
+    if (conflitoEncontrado) {
+      Alert.alert("Peça Indisponível! ⚠️", `A peça "${conflitoEncontrado.pecaNome}" já está reservada para "${conflitoEncontrado.cliente_nome}" no período de ${conflitoEncontrado.data_retirada} até ${conflitoEncontrado.data_devolucao}. Remova esta peça da lista ou mude as datas.`);
       return; 
     }
 
     const c = clientes.find(item => item && item.id === clienteId);
-    const k = kits.find(item => item && item.id === kitId);
     const numAluguel = Number(valorAluguel.replace(/\./g, '').replace(',', '.'));
+
+    // Junta os nomes para exibição nos cartões antigos
+    const nomesJuntos = kitsSelecionados.map(k => k.nome).join(', ');
 
     const dadosParaSalvar: any = {
       cliente_id: clienteId,
       cliente_nome: c?.responsavel_nome || aluguerParaEditar?.cliente_nome || "Sem nome",
       cliente_telefone: c?.responsavel_whatsapp || aluguerParaEditar?.cliente_telefone || "", 
-      kit_id: kitId,
-      kit_nome: `${k?.id_etiqueta ? '['+k.id_etiqueta+'] ' : ''}${k?.personagem || k?.descricao || aluguerParaEditar?.kit_nome || "Sem nome"}`,
+      
+      kits_alugados: kitsSelecionados, // 👈 ARRAY COM TODAS AS PEÇAS
+      kit_id: kitsSelecionados[0]?.id || '', // Backward compatibility (salva o 1º)
+      kit_nome: nomesJuntos, // Backward compatibility (salva todos os nomes juntos)
+      
       data_retirada: dataRetirada,
       data_devolucao: dataDevolucao,
       status: aluguerParaEditar?.status || 'Pendente',
       valor_aluguel: numAluguel || 0,
-      valor_pago: numAluguel || 0, // 👈 O SEGREDO: O sistema agora diz automaticamente que o valor pago é o total!
+      valor_pago: numAluguel || 0,
       forma_pagamento: formaPagamento,
       valor_multa: aluguerParaEditar?.valor_multa || 0,
       status_multa: aluguerParaEditar?.status_multa || 'Sem Multa',
@@ -220,7 +275,7 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                 )}
               </View>
 
-              <Text style={styles.sectionTitle}>2. Encontrar Peça no Acervo *</Text>
+              <Text style={styles.sectionTitle}>2. Adicionar Peças ({kitsSelecionados.length}) *</Text>
               
               <View style={styles.pickerContainer}>
                 <Picker selectedValue={filtroSecao} onValueChange={setFiltroSecao} style={styles.picker}>
@@ -238,24 +293,45 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                 </Picker>
               </View>
 
-              <View style={[styles.pickerContainer, { borderColor: '#ea580c', borderWidth: 1.5 }]}>
-                <Picker selectedValue={kitId} onValueChange={setKitId} style={styles.picker}>
-                  <Picker.Item label={`Escolha a Peça (${kitsFiltrados.length} disponíveis)...`} value="" />
-                  {kitsFiltrados.map(k => (
-                    <Picker.Item 
-                      key={k.id} 
-                      label={`${k.id_etiqueta ? '['+k.id_etiqueta+'] ' : ''}${k.personagem || k.descricao || 'Sem descrição'}`} 
-                      value={k.id} 
-                    />
-                  ))}
-                  {aluguerParaEditar && kitId === aluguerParaEditar.kit_id && !kitsFiltrados.find(k => k.id === aluguerParaEditar.kit_id) && (
-                    <Picker.Item label={`Peça Atual: ${aluguerParaEditar.kit_nome}`} value={aluguerParaEditar.kit_id} />
-                  )}
-                  {kitInicialId && kitId === kitInicialId && !kitsFiltrados.find(k => k.id === kitInicialId) && kits.find(k => k.id === kitInicialId) && (
-                    <Picker.Item label={`Peça Lida: ${kits.find(k => k.id === kitInicialId)?.personagem}`} value={kitInicialId} />
-                  )}
-                </Picker>
+              {/* 👇 ÁREA DE SELEÇÃO E BOTÃO DE ADICIONAR */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                <View style={[styles.pickerContainer, { flex: 1, marginBottom: 0, borderColor: '#ea580c', borderWidth: 1.5 }]}>
+                  <Picker selectedValue={kitIdPicker} onValueChange={setKitIdPicker} style={styles.picker}>
+                    <Picker.Item label={`Escolher Peça (${kitsFiltrados.length})...`} value="" />
+                    {kitsFiltrados.map(k => (
+                      <Picker.Item 
+                        key={k.id} 
+                        label={`${k.id_etiqueta ? '['+k.id_etiqueta+'] ' : ''}${k.personagem || k.descricao || 'Sem descrição'}`} 
+                        value={k.id} 
+                      />
+                    ))}
+                  </Picker>
+                </View>
+                <TouchableOpacity 
+                  style={[styles.btnAdicionarKit, !kitIdPicker && { opacity: 0.5 }]} 
+                  onPress={handleAdicionarKit}
+                  disabled={!kitIdPicker}
+                >
+                  <Feather name="plus" size={24} color="#fff" />
+                </TouchableOpacity>
               </View>
+
+              {/* 👇 LISTA VISUAL DAS PEÇAS SELECIONADAS */}
+              {kitsSelecionados.length > 0 && (
+                <View style={styles.listaSelecionados}>
+                  {kitsSelecionados.map((k, index) => (
+                    <View key={k.id || index} style={styles.itemSelecionado}>
+                      <View style={styles.itemSelecionadoIcon}>
+                        <Feather name="check" size={14} color="#16a34a" />
+                      </View>
+                      <Text style={styles.itemSelecionadoTexto} numberOfLines={2}>{k.nome}</Text>
+                      <TouchableOpacity onPress={() => handleRemoverKit(k.id)} style={{ padding: 4 }}>
+                        <Feather name="trash-2" size={20} color="#dc2626" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
 
               <Text style={styles.sectionTitle}>3. Datas *</Text>
               <View style={styles.row}>
@@ -278,7 +354,7 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
               />
 
               <Text style={styles.sectionTitle}>5. Valor (R$) e Pagamento *</Text>
-
+              
               <TextInput 
                 style={[styles.input, { marginBottom: 12 }]} 
                 placeholder="Valor Total do Aluguel *" 
@@ -296,7 +372,6 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
                 </Picker>
               </View>
 
-              {/* 👇 TEXTO DO BOTÃO ALTERADO PARA ALUGUEL */}
               <TouchableOpacity style={styles.btnSalvar} onPress={confirmar}>
                 <Text style={styles.btnSalvarText}>{aluguerParaEditar ? 'Atualizar Aluguel' : 'Salvar Aluguel'}</Text>
               </TouchableOpacity>
@@ -331,5 +406,12 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 10, fontSize: 16, color: '#111827' },
   listaBuscaContainer: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, maxHeight: 150, marginBottom: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   itemBusca: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  itemBuscaTexto: { fontSize: 16, color: '#111827' }
+  itemBuscaTexto: { fontSize: 16, color: '#111827' },
+  
+  // 👇 ESTILOS DA NOVA LISTA DE PEÇAS
+  btnAdicionarKit: { backgroundColor: '#ea580c', width: 50, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  listaSelecionados: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#ffedd5', borderRadius: 12, padding: 12, marginBottom: 16, gap: 8 },
+  itemSelecionado: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#fdba74' },
+  itemSelecionadoIcon: { backgroundColor: '#dcfce7', width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  itemSelecionadoTexto: { flex: 1, fontSize: 14, color: '#111827', fontWeight: '500' }
 });
