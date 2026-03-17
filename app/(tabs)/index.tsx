@@ -55,20 +55,30 @@ export default function HomeScreen() {
     const dataDevObj = parseDataBR(alug.data_devolucao);
     let adicionadoNaAgenda = false;
 
-    if (alug.medidas_costureira && alug.medidas_costureira.trim() !== '') {
+    // 👇 LÓGICA 1: Só está na costureira se a peça ainda estiver Pendente na loja!
+    if (alug.medidas_costureira && alug.medidas_costureira.trim() !== '' && alug.status === 'Pendente') {
       countCostureira++;
     }
 
     if (dataDevObj < hojeObj) {
       countAtrasados++;
-      agendaHoje.push({ ...alug, tipo: 'atraso', hora: 'Atrasado', aluno: alug.cliente_nome, kit: alug.kit_nome });
+      agendaHoje.push({ ...alug, tipo: 'atraso', hora: 'Atrasado', aluno: alug.cliente_nome, kit: alug.kit_nome, concluido: false });
       adicionadoNaAgenda = true;
     }
 
+    // 👇 LÓGICA 2: Marca visualmente o que já foi entregue hoje
     if (alug.data_retirada === hojeStr) {
       countEntregas++;
       if (!adicionadoNaAgenda) {
-        agendaHoje.push({ ...alug, tipo: 'entrega', hora: 'Sai Hoje', aluno: alug.cliente_nome, kit: alug.kit_nome });
+        const jaEntregue = alug.status === 'Entregue';
+        agendaHoje.push({ 
+          ...alug, 
+          tipo: 'entrega', 
+          hora: jaEntregue ? '✅ Já Entregue' : 'Sai Hoje', 
+          aluno: alug.cliente_nome, 
+          kit: alug.kit_nome,
+          concluido: jaEntregue 
+        });
         adicionadoNaAgenda = true;
       }
     }
@@ -76,9 +86,19 @@ export default function HomeScreen() {
     if (alug.data_devolucao === hojeStr) {
       countDevolucoes++;
       if (!adicionadoNaAgenda) {
-        agendaHoje.push({ ...alug, tipo: 'devolucao', hora: 'Volta Hoje', aluno: alug.cliente_nome, kit: alug.kit_nome });
+        // Se já está na rua, falta voltar. (Se já tivesse voltado, estava Devolvido e parava no topo do código)
+        agendaHoje.push({ ...alug, tipo: 'devolucao', hora: 'Volta Hoje', aluno: alug.cliente_nome, kit: alug.kit_nome, concluido: false });
       }
     }
+  });
+
+  // 👇 LÓGICA 3: Ordenação Inteligente (Atrasos primeiro, Tarefas depois, Concluídos no fim)
+  agendaHoje.sort((a, b) => {
+    if (a.tipo === 'atraso' && b.tipo !== 'atraso') return -1;
+    if (b.tipo === 'atraso' && a.tipo !== 'atraso') return 1;
+    if (a.concluido && !b.concluido) return 1;
+    if (!a.concluido && b.concluido) return -1;
+    return 0;
   });
 
   const stats = [
@@ -91,42 +111,29 @@ export default function HomeScreen() {
   return (
     <View style={styles.mainContainer}>
       
-      {/* BARRA SUPERIOR FIXA (Design Premium) */}
+      {/* BARRA SUPERIOR FIXA */}
       <View style={styles.fixedHeader}>
-        
-        {/* Lado Esquerdo: Logo e Nome */}
         <View style={styles.brandContainer}>
-          <Image 
-            source={require('../../assets/images/logo.png')} 
-            style={styles.logoImage} 
-            resizeMode="contain"
-          />
+          {/* Se a imagem quebrar no seu teste, troque por um Feather icon provisório */}
+          <Image source={require('../../assets/images/logo.png')} style={styles.logoImage} resizeMode="contain" />
           <View>
             <Text style={styles.logoTextName}>Nação Nordestina</Text>
             <Text style={styles.logoSubText}>Gestão de Acervo</Text>
           </View>
         </View>
 
-        {/* Lado Direito: Perfil do Funcionário */}
         <TouchableOpacity style={styles.profileButton}>
           <Feather name="user" size={20} color="#ea580c" />
         </TouchableOpacity>
-
       </View>
 
       {/* CONTEÚDO QUE ROLA */}
-      <ScrollView 
-        style={styles.container} 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: 100, paddingTop: 16 }} 
-      >
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, paddingBottom: 100, paddingTop: 16 }}>
+        
         <View style={styles.quickActionsContainer}>
           <TouchableOpacity 
             style={[styles.actionButton, { backgroundColor: '#ea580c' }]}
-            onPress={() => {
-              setAluguerParaEditar(null);
-              setModalVisible(true);
-            }}
+            onPress={() => { setAluguerParaEditar(null); setModalVisible(true); }}
           >
             <Feather name="plus-circle" size={28} color="#fff" />
             <Text style={styles.actionText}>Novo Aluguel</Text>
@@ -168,48 +175,47 @@ export default function HomeScreen() {
 
             <View style={styles.section}>
               <View style={styles.agendaHeader}>
-                <Text style={styles.sectionTitle}>Próximos Movimentos</Text>
+                <Text style={styles.sectionTitle}>Tarefas de Hoje</Text>
                 <TouchableOpacity onPress={() => router.push('/agenda')}>
-                  <Text style={styles.seeAllText}>Ver Todos</Text>
+                  <Text style={styles.seeAllText}>Ver Agenda</Text>
                 </TouchableOpacity>
               </View>
               
               {agendaHoje.length === 0 ? (
-                <Text style={{ textAlign: 'center', color: '#9ca3af', marginTop: 10 }}>Nenhuma movimentação pendente para hoje.</Text>
+                <Text style={{ textAlign: 'center', color: '#9ca3af', marginTop: 10 }}>Nenhuma tarefa pendente para hoje. 🎉</Text>
               ) : (
                 agendaHoje.map((item) => (
                   <TouchableOpacity 
                     key={item.id} 
-                    style={styles.agendaItem}
+                    style={[styles.agendaItem, item.concluido && { opacity: 0.6, backgroundColor: '#f9fafb' }]}
                     activeOpacity={0.7}
-                    onPress={() => {
-                      setAluguerParaEditar(item);
-                      setModalVisible(true);
-                    }}
+                    onPress={() => { setAluguerParaEditar(item); setModalVisible(true); }}
                   >
                     <View style={[styles.agendaIcon, { 
-                      backgroundColor: item.tipo === 'entrega' ? '#eff6ff' : item.tipo === 'devolucao' ? '#f0fdf4' : '#fef2f2' 
+                      backgroundColor: item.tipo === 'entrega' && !item.concluido ? '#eff6ff' : 
+                                       item.tipo === 'entrega' && item.concluido ? '#dcfce7' : 
+                                       item.tipo === 'devolucao' ? '#f0fdf4' : '#fef2f2' 
                     }]}>
                       <Feather 
-                        name={item.tipo === 'entrega' ? 'arrow-up-circle' : item.tipo === 'devolucao' ? 'arrow-down-circle' : 'alert-triangle'} 
+                        name={item.concluido ? 'check-circle' : item.tipo === 'entrega' ? 'arrow-up-circle' : item.tipo === 'devolucao' ? 'arrow-down-circle' : 'alert-triangle'} 
                         size={20} 
-                        color={item.tipo === 'entrega' ? '#1d4ed8' : item.tipo === 'devolucao' ? '#15803d' : '#b91c1c'} 
+                        color={item.concluido ? '#16a34a' : item.tipo === 'entrega' ? '#1d4ed8' : item.tipo === 'devolucao' ? '#15803d' : '#b91c1c'} 
                       />
                     </View>
                     
                     <View style={styles.agendaInfo}>
-                      <Text style={styles.agendaName}>{item.aluno}</Text>
+                      <Text style={[styles.agendaName, item.concluido && { textDecorationLine: 'line-through', color: '#6b7280' }]}>{item.aluno}</Text>
                       <Text style={styles.agendaKit} numberOfLines={1}>{item.kit}</Text>
                       
-                      {item.medidas_costureira && item.medidas_costureira.trim() !== '' && (
+                      {item.medidas_costureira && item.medidas_costureira.trim() !== '' && !item.concluido && (
                         <View style={styles.badgeCostureira}>
                           <Feather name="scissors" size={12} color="#9333ea" />
-                          <Text style={styles.badgeCostureiraText}>Com Ajustes</Text>
+                          <Text style={styles.badgeCostureiraText}>Ajustes Pendentes</Text>
                         </View>
                       )}
                     </View>
                     
-                    <Text style={[styles.agendaTime, { color: item.tipo === 'atraso' ? '#b91c1c' : '#111827' }]}>
+                    <Text style={[styles.agendaTime, { color: item.concluido ? '#16a34a' : item.tipo === 'atraso' ? '#b91c1c' : '#111827' }]}>
                       {item.hora}
                     </Text>
                   </TouchableOpacity>
@@ -220,22 +226,13 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      {/* MODAL (FORA DO SCROLLVIEW PARA NÃO DAR CONFLITOS DE ECRÃ) */}
       <AluguerModal 
         visible={modalVisible} 
         aluguerParaEditar={aluguerParaEditar}
-        onClose={() => {
-          setModalVisible(false);
-          setAluguerParaEditar(null);
-        }} 
+        onClose={() => { setModalVisible(false); setAluguerParaEditar(null); }} 
         onSave={async (d: any) => { 
-          if(d.id) {
-            await atualizarAluguer(d.id, d);
-          } else {
-            await adicionarAluguer(d);
-          }
-          setModalVisible(false); 
-          setAluguerParaEditar(null);
+          if(d.id) { await atualizarAluguer(d.id, d); } else { await adicionarAluguer(d); }
+          setModalVisible(false); setAluguerParaEditar(null);
         }} 
         alugueresExistentes={alugueres || []} 
       />
@@ -245,78 +242,16 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  mainContainer: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  container: { 
-    flex: 1, 
-  },
-  
-  // ESTILOS DO CABEÇALHO FIXO PREMIUM
-  fixedHeader: { 
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24, 
-    paddingTop: 56,
-    paddingBottom: 16, 
-    backgroundColor: '#fff', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f3f4f6',
-    elevation: 8, 
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    zIndex: 10,
-  },
-  brandContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  logoImage: { 
-    width: 36, 
-    height: 36, 
-    marginRight: 12 
-  },
-  logoTextName: { 
-    fontSize: 18, 
-    fontWeight: '800', 
-    color: '#111827',
-    letterSpacing: -0.5, 
-  },
-  logoSubText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#ea580c', 
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: -2, 
-  },
-  profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff7ed', 
-    borderWidth: 1,
-    borderColor: '#ffedd5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  sectionHeaderWithDate: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  dateText: { 
-    fontSize: 14, 
-    color: '#6b7280', 
-    fontWeight: '500'
-  },
-
+  mainContainer: { flex: 1, backgroundColor: '#f9fafb' },
+  container: { flex: 1 },
+  fixedHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingTop: 56, paddingBottom: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f3f4f6', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.04, shadowRadius: 10, zIndex: 10 },
+  brandContainer: { flexDirection: 'row', alignItems: 'center' },
+  logoImage: { width: 36, height: 36, marginRight: 12 },
+  logoTextName: { fontSize: 18, fontWeight: '800', color: '#111827', letterSpacing: -0.5 },
+  logoSubText: { fontSize: 11, fontWeight: '700', color: '#ea580c', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: -2 },
+  profileButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#ffedd5', justifyContent: 'center', alignItems: 'center' },
+  sectionHeaderWithDate: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  dateText: { fontSize: 14, color: '#6b7280', fontWeight: '500' },
   quickActionsContainer: { flexDirection: 'row', paddingHorizontal: 24, gap: 16 },
   actionButton: { flex: 1, padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   actionText: { color: '#fff', fontWeight: 'bold', marginTop: 8, fontSize: 14 },
