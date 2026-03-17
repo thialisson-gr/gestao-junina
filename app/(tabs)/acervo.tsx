@@ -196,6 +196,7 @@ export default function AcervoScreen() {
         onClose={() => { setModalVisible(false); setKitEmEdicao(null); }} 
         onSave={handleSalvarKit} 
         kitParaEditar={kitEmEdicao} 
+        kitsExistentes={kits}
       />
     </View>
   );

@@ -3,9 +3,10 @@ import { Picker } from '@react-native-picker/picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Keyboard, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-export default function KitModal({ visible, onClose, onSave, kitParaEditar }: any) {
+// 👇 Adicionámos `kitsExistentes` aos parâmetros para podermos ler os anos já usados
+export default function KitModal({ visible, onClose, onSave, kitParaEditar, kitsExistentes = [] }: any) {
   const [permission, requestPermission] = useCameraPermissions();
   const [idEtiqueta, setIdEtiqueta] = useState('');
   const [personagem, setPersonagem] = useState('');
@@ -16,6 +17,10 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
   const [statusInterno, setStatusInterno] = useState('Ativo');
   
   const [isScanning, setIsScanning] = useState(false);
+  
+  // 👇 Novos estados para o Autocompletar do Ano/Coleção
+  const [mostrarSugestoesAno, setMostrarSugestoesAno] = useState(false);
+  const [anosTemasUnicos, setAnosTemasUnicos] = useState<string[]>([]);
 
   useEffect(() => {
     if (visible) {
@@ -37,8 +42,15 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
         setStatusInterno('Ativo');
       }
       setIsScanning(false);
+      setMostrarSugestoesAno(false);
+
+      // 👇 Prepara a lista única de Anos/Temas para o Autocompletar
+      if (kitsExistentes && kitsExistentes.length > 0) {
+        const anosUnicos = [...new Set(kitsExistentes.map((k: any) => k.ano_tema || k.tema).filter((t: any) => t))] as string[];
+        setAnosTemasUnicos(anosUnicos);
+      }
     }
-  }, [visible, kitParaEditar]);
+  }, [visible, kitParaEditar, kitsExistentes]);
 
   const escolherImagem = async () => {
     try {
@@ -63,7 +75,6 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
   };
 
   const handleSalvar = () => {
-    // 👇 VALIDAÇÃO ATUALIZADA: Agora exige Etiqueta, Personagem, Ano/Coleção, Gênero e Categoria
     if (!idEtiqueta.trim() || !personagem.trim() || !anoTema.trim() || !genero || !categoria) {
       Alert.alert("Atenção", "Por favor, preencha todos os campos obrigatórios (*).");
       return;
@@ -90,6 +101,11 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
     }
     setIsScanning(true);
   };
+
+  // 👇 Filtra as sugestões com base no que a pessoa está a digitar
+  const sugestoesFiltradasAno = anosTemasUnicos.filter(a => 
+    a.toLowerCase().includes(anoTema.toLowerCase()) && a !== anoTema
+  );
 
   if (isScanning) {
     return (
@@ -130,7 +146,7 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+          <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             
             <TouchableOpacity style={styles.imagePickerButton} onPress={escolherImagem}>
               {imagemUri ? (
@@ -153,12 +169,43 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar }: an
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Personagem *</Text>
-            <TextInput style={styles.input} value={personagem} onChangeText={setPersonagem} placeholder="Ex: Noivo, Lampião..." />
+            {/* 👇 Alterado o texto para Personagem ou Acessório */}
+            <Text style={styles.label}>Personagem ou Acessório *</Text>
+            <TextInput style={styles.input} value={personagem} onChangeText={setPersonagem} placeholder="Ex: Noivo, Lampião, Tiara de Girassol..." />
 
-            {/* 👇 Adicionado o * nos três campos */}
-            <Text style={styles.label}>Ano / Coleção *</Text>
-            <TextInput style={styles.input} value={anoTema} onChangeText={setAnoTema} placeholder="Ex: 2026 - Sertão" />
+            {/* 👇 Lógica de Autocompletar do Ano/Tema */}
+            <View style={{ zIndex: 10 }}>
+              <Text style={styles.label}>Ano / Coleção *</Text>
+              <TextInput 
+                style={styles.input} 
+                value={anoTema} 
+                onChangeText={(texto) => {
+                  setAnoTema(texto);
+                  setMostrarSugestoesAno(true);
+                }} 
+                onFocus={() => setMostrarSugestoesAno(true)}
+                placeholder="Ex: 2026 - Sertão" 
+              />
+              
+              {mostrarSugestoesAno && sugestoesFiltradasAno.length > 0 && anoTema.length > 0 && (
+                <View style={styles.listaSugestoes}>
+                  {sugestoesFiltradasAno.map((sugestao, index) => (
+                    <TouchableOpacity 
+                      key={index}
+                      style={styles.itemSugestao}
+                      onPress={() => {
+                        setAnoTema(sugestao);
+                        setMostrarSugestoesAno(false);
+                        Keyboard.dismiss();
+                      }}
+                    >
+                      <Feather name="clock" size={14} color="#9ca3af" style={{marginRight: 8}} />
+                      <Text style={styles.itemSugestaoTexto}>{sugestao}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
 
             <Text style={styles.label}>Tipo de Peça *</Text>
             <View style={styles.pickerContainer}>
@@ -246,4 +293,9 @@ const styles = StyleSheet.create({
   imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   imagePlaceholderText: { color: '#9ca3af', fontSize: 14, fontWeight: '500' },
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+
+  // 👇 Novos estilos da lista de Autocompletar
+  listaSugestoes: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, maxHeight: 120, position: 'absolute', top: 80, left: 0, right: 0, zIndex: 100, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  itemSugestao: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  itemSugestaoTexto: { fontSize: 15, color: '#374151' }
 });
