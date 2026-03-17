@@ -61,26 +61,45 @@ export default function ScannerScreen() {
     const peca = kits.find(k => k?.id_etiqueta === data);
 
     if (peca) {
-      const ativo = alugueres.find(a => a?.kit_id === peca?.id && a?.status !== 'Devolvido' && a?.status !== 'Cancelado');
-      
+      // Procura se a peça está num aluguel ativo (Pendente, Entregue ou Atrasado)
+      const ativo = alugueres.find(a => {
+        if (a?.status === 'Devolvido' || a?.status === 'Cancelado') return false;
+        
+        const ehKitUnico = a?.kit_id === peca.id;
+        const taNoPacote = a?.kits_alugados?.some((k: any) => k.id === peca.id);
+        
+        return ehKitUnico || taNoPacote;
+      });
+
       if (ativo) {
-        // Se a peça lida estiver alugada a alguém, abre o modo de "Devolução/Recebimento a Jato"
-        setPecaEncontradaParaDevolucao(peca);
-        setAluguerAtivo(ativo);
+        // 👇 A REGRA DE OURO: Se está alugada, NÃO PODE ir para o carrinho.
+        Alert.alert(
+          "Peça Indisponível 🛑",
+          `A peça #${peca.id_etiqueta} consta como "${ativo.status}" para o cliente "${ativo.cliente_nome}". Para a colocar no carrinho, ela precisa ser devolvida primeiro.`,
+          [
+            { text: "Cancelar Leitura", style: "cancel", onPress: () => setCameraPaused(false) },
+            { 
+              text: "Receber Devolução", 
+              onPress: () => {
+                setPecaEncontradaParaDevolucao(peca);
+                setAluguerAtivo(ativo);
+              } 
+            }
+          ]
+        );
       } else {
-        // Se a peça lida estiver Livre, adiciona ao "Carrinho" de novo aluguel
+        // Se a peça está 100% livre, vai direto para o carrinho normalmente
         const jaEstaNoCarrinho = carrinhoPecas.some(p => p.id === peca.id);
         
         if (!jaEstaNoCarrinho) {
-          // O nome formatado é importante para bater certo com o formato que o Modal espera
           const nomeFormatado = `${peca.id_etiqueta ? '['+peca.id_etiqueta+'] ' : ''}${peca.personagem || peca.descricao || 'Sem nome'}`;
           setCarrinhoPecas(prev => [...prev, { id: peca.id, nome: nomeFormatado }]);
-          // Avisa de forma suave e liberta a câmara logo a seguir
-          Alert.alert("Peça Adicionada!", `A peça #${peca.id_etiqueta} foi colocada na lista de aluguel.`, [{ text: "Ler Próxima", onPress: () => setCameraPaused(false) }]);
+          Alert.alert("Peça Adicionada! 🛒", `A peça #${peca.id_etiqueta} foi colocada no seu carrinho de leitura.`, [{ text: "Ler Próxima", onPress: () => setCameraPaused(false) }]);
         } else {
-          Alert.alert("Aviso", "Esta peça já está na sua lista de leitura.", [{ text: "Ok", onPress: () => setCameraPaused(false) }]);
+          Alert.alert("Aviso", "Esta peça já está no seu carrinho.", [{ text: "Ok", onPress: () => setCameraPaused(false) }]);
         }
       }
+
     } else {
       Alert.alert(
         "Peça Não Encontrada 🕵️‍♂️",
@@ -100,19 +119,25 @@ export default function ScannerScreen() {
   const handleDevolucaoAJato = () => {
     if (!aluguerAtivo) return;
     
+    // Formata a lista para ficar bonita no aviso
+    const listaPecas = (aluguerAtivo?.kit_nome || '').split(', ').map((p: string) => `🔸 ${p}`).join('\n');
+
     Alert.alert(
-      "Confirmar Devolução",
-      `Deseja marcar a peça entregue por ${aluguerAtivo?.cliente_nome} como Devolvida?`,
+      "Confirmar Devolução Completa 📦",
+      `O cliente ${aluguerAtivo?.cliente_nome} alugou o seguinte pacote:\n\n${listaPecas}\n\nConfirma que TODAS as peças estão a ser devolvidas agora?`,
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: "Ainda Falta Peça", style: "cancel" },
         { 
-          text: "Sim, Receber", 
+          text: "Sim, Receber Tudo", 
           onPress: async () => {
-            await atualizarAluguer(aluguerAtivo.id, { status: 'Devolvido' });
-            Alert.alert("Sucesso! ✅", "Peça devolvida e libertada para novos alugueres.");
+            await atualizarAluguer(aluguerAtivo.id, { 
+              status: 'Devolvido',
+              data_devolucao_real: new Date().toISOString() // 👈 Bónus: Carimbo real para o financeiro!
+            });
+            Alert.alert("Sucesso! ✅", "Aluguel encerrado e peças libertadas.");
             setPecaEncontradaParaDevolucao(null);
             setAluguerAtivo(null);
-            setCameraPaused(false); // Liberta a câmara para ler mais
+            setCameraPaused(false); 
           }
         }
       ]

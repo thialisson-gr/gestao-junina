@@ -80,32 +80,32 @@ export default function AgendaScreen() {
   const abrirWhatsApp = () => {
     const telefone = aluguerSelecionado?.cliente_telefone;
     const nome = aluguerSelecionado?.cliente_nome;
-    const peca = aluguerSelecionado?.kit_nome;
+    const pecasNome = aluguerSelecionado?.kit_nome || '';
 
     if (!telefone) {
-      Alert.alert("Sem Número 📱", "Não guardámos o telefone deste cliente neste aluguer. Terá de ver no cadastro de clientes.");
+      Alert.alert("Sem Número 📱", "Não guardámos o telefone deste cliente neste aluguer.");
       return;
     }
 
     let numeroLimpo = telefone.replace(/\D/g, '');
     if (numeroLimpo.length <= 11) { numeroLimpo = `55${numeroLimpo}`; }
 
-    let mensagem = `Olá ${nome}! Tudo bem? Passando para avisar sobre o seu aluguer da peça *${peca}*...`;
+    // 👇 Transforma "Peça 1, Peça 2" em uma lista com emojis
+    const listaPecas = pecasNome.split(', ').map((p: string) => `🔸 ${p}`).join('\n');
+
+    let mensagem = `Olá ${nome}! Tudo bem? Passando para avisar sobre o seu aluguel das seguintes peças:\n\n${listaPecas}\n\n...`;
     
     if (aluguerSelecionado.status === 'Pendente') {
-      mensagem = `Olá ${nome}! Tudo bem? A sua peça *${peca}* já está separada e pronta para ser retirada connosco! 👗✨`;
+      mensagem = `Olá ${nome}! Tudo bem? As suas peças já estão separadas e prontas para serem retiradas connosco! 👗✨\n\n${listaPecas}`;
     } else if (aluguerSelecionado.status === 'Entregue') {
-      mensagem = `Olá ${nome}! Tudo bem? Apenas um lembrete amigável de que a devolução da peça *${peca}* está marcada para o dia ${aluguerSelecionado.data_devolucao}. Qualquer dúvida, estamos à disposição! 🗓️`;
+      mensagem = `Olá ${nome}! Tudo bem? Apenas um lembrete amigável de que a devolução das suas peças está marcada para o dia *${aluguerSelecionado.data_devolucao}*.\n\n${listaPecas}\n\nQualquer dúvida, estamos à disposição! 🗓️`;
     }
 
     const url = `whatsapp://send?phone=${numeroLimpo}&text=${encodeURIComponent(mensagem)}`;
-    
-    Linking.canOpenURL(url)
-      .then(suportado => {
-        if (!suportado) { Alert.alert("Erro", "O WhatsApp não parece estar instalado."); } 
-        else { return Linking.openURL(url); }
-      })
-      .catch(err => console.error('Ocorreu um erro ao abrir o WhatsApp', err));
+    Linking.canOpenURL(url).then(suportado => {
+      if (!suportado) { Alert.alert("Erro", "O WhatsApp não parece estar instalado."); } 
+      else { return Linking.openURL(url); }
+    }).catch(err => console.error('Erro ao abrir o WhatsApp', err));
   };
 
   // 👇 NOVA FUNÇÃO: Mensagem automática de responsabilidade na entrega
@@ -114,15 +114,18 @@ export default function AgendaScreen() {
     if (!telefone) return;
 
     Alert.alert(
-      "Peça Entregue! ✅",
-      "Deseja enviar a mensagem de cuidados e regras para o WhatsApp do cliente agora?",
+      "Peças Entregues! ✅",
+      "Deseja enviar a mensagem de regras para o WhatsApp do cliente agora?",
       [
         { text: "Não", style: "cancel" },
         { text: "Sim, Enviar", onPress: () => {
             let numeroLimpo = telefone.replace(/\D/g, '');
             if (numeroLimpo.length <= 11) { numeroLimpo = `55${numeroLimpo}`; }
             
-            const mensagem = `Olá ${aluguer.cliente_nome}! \n\nConfirmamos a entrega do item: \n*${aluguer.kit_nome}* para o seu evento. 🎉\n\nLembramos que a peça está sob a sua responsabilidade. Pedimos muito cuidado com manchas, rasgos ou queimaduras para evitarmos a cobrança de multas, combinado? 😉\n\nA sua devolução está marcada para o dia *${aluguer.data_devolucao}*. Bom evento! 🌵✨`;
+            // 👇 Formata também a mensagem de cuidados
+            const listaPecas = (aluguer.kit_nome || '').split(', ').map((p: string) => `🔸 ${p}`).join('\n');
+            
+            const mensagem = `Olá ${aluguer.cliente_nome}! 🎉\n\nConfirmamos a entrega dos seguintes itens para o seu evento:\n\n${listaPecas}\n\nLembramos que os itens estão sob a sua responsabilidade. Pedimos muito cuidado com manchas, rasgos ou queimaduras para evitarmos a cobrança de multas, combinado? 😉\n\nA sua devolução está marcada para o dia *${aluguer.data_devolucao}*. Bom evento! 🌵✨`;
             
             const url = `whatsapp://send?phone=${numeroLimpo}&text=${encodeURIComponent(mensagem)}`;
             Linking.openURL(url).catch(() => Alert.alert("Erro", "Não foi possível abrir o WhatsApp."));
@@ -246,13 +249,18 @@ export default function AgendaScreen() {
               </TouchableOpacity>
               
               {/* 👇 TRAVA DE ATRASO: Entregue */}
+              {/* 👇 TRAVA DE ATRASO E CARIMBO REAL: Entregue */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
                 if (selecionadoEstaAtrasado) {
                   Alert.alert("Ação Inválida 🚫", "Esta peça já está Atrasada. A única ação possível agora é marcar como 'Devolvido' e cobrar a multa.");
                   return;
                 }
                 if(aluguerSelecionado?.id) {
-                  atualizarAluguer(aluguerSelecionado.id, { status: 'Entregue' }); 
+                  // 👇 A CORREÇÃO: Adicionamos a data_entrega_real para o Financeiro ler!
+                  atualizarAluguer(aluguerSelecionado.id, { 
+                    status: 'Entregue',
+                    data_entrega_real: new Date().toISOString() 
+                  }); 
                   setModalOpcoesVisible(false);
                   enviarMensagemCuidados(aluguerSelecionado);
                 }
@@ -260,13 +268,19 @@ export default function AgendaScreen() {
                 <Text style={styles.btnMenuText}>Entregue</Text>
               </TouchableOpacity>
 
-              {/* 👇 TRAVA DE PENDENTE: Devolvido */}
+              {/* 👇 TRAVA DE PENDENTE E CARIMBO REAL: Devolvido */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
                 if (aluguerSelecionado?.status === 'Pendente') {
                   Alert.alert("Ação Inválida 🚫", "Não pode marcar como 'Devolvido' uma peça que ainda está como 'Pendente'. Marque como 'Entregue' primeiro.");
                   return;
                 }
-                if(aluguerSelecionado?.id) atualizarAluguer(aluguerSelecionado.id, { status: 'Devolvido' }); 
+                if(aluguerSelecionado?.id) {
+                  // 👇 BÓNUS: Carimbo de devolução real para histórico impecável
+                  atualizarAluguer(aluguerSelecionado.id, { 
+                    status: 'Devolvido',
+                    data_devolucao_real: new Date().toISOString()
+                  }); 
+                }
                 setModalOpcoesVisible(false); 
               }}>
                 <Text style={styles.btnMenuText}>Devolvido</Text>

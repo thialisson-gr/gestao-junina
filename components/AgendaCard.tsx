@@ -106,16 +106,17 @@ export default function AgendaCard({ item, onPressOpcoes }: any) {
             <Text style={styles.tituloDetalhe}>Resumo Financeiro</Text>
             
             <View style={styles.linhaFinanceira}>
-              <Text style={styles.textoFinLabel}>Valor Total:</Text>
-              <Text style={styles.textoFinValor}>{formatarMoeda(valorTotal)} ({item.forma_pagamento || 'N/A'})</Text>
-            </View>
-            
-            <View style={styles.linhaFinanceira}>
               <Text style={styles.textoFinLabel}>Pago:</Text>
               <Text style={styles.textoFinValor}>{formatarMoeda(valorPago)}</Text>
             </View>
 
-            {valorPendente > 0 ? (
+            {/* 👇 NOVA LÓGICA DE STATUS DE PAGAMENTO */}
+            {item.status === 'Pendente' ? (
+              <View style={[styles.linhaFinanceira, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#fde047' }]}>
+                <Text style={[styles.textoFinLabel, { color: '#a16207', fontWeight: 'bold' }]}>Status do Pagamento:</Text>
+                <Text style={[styles.textoFinValor, { color: '#a16207', fontWeight: 'bold' }]}>⏳ A Pagar na Retirada</Text>
+              </View>
+            ) : valorPendente > 0 ? (
               <View style={[styles.linhaFinanceira, { marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#fed7aa' }]}>
                 <Text style={[styles.textoFinLabel, { color: '#c2410c', fontWeight: 'bold' }]}>Falta Pagar:</Text>
                 <Text style={[styles.textoFinValor, { color: '#c2410c', fontWeight: 'bold' }]}>{formatarMoeda(valorPendente)}</Text>

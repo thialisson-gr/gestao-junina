@@ -381,8 +381,19 @@ export default function AluguerModal({ visible, onClose, onSave, alugueresExiste
         </View>
       </Modal>
 
-      {showPickerRetirada && <DateTimePicker value={dateObjectRetirada} mode="date" onChange={(e, d) => { setShowPickerRetirada(false); if(d){ setDateObjectRetirada(d); setDataRetirada(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`);} }} />}
-      {showPickerDevolucao && <DateTimePicker value={dateObjectDevolucao} mode="date" onChange={(e, d) => { setShowPickerDevolucao(false); if(d){ setDateObjectDevolucao(d); setDataDevolucao(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`);} }} />}
+      {showPickerRetirada && <DateTimePicker 
+        value={dateObjectRetirada} 
+        mode="date" 
+        minimumDate={aluguerParaEditar ? undefined : new Date()} // 👈 Só bloqueia o passado em NOVOS aluguéis
+        onChange={(e, d) => { setShowPickerRetirada(false); if(d){ setDateObjectRetirada(d); setDataRetirada(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`);} }} 
+      />}
+      
+      {showPickerDevolucao && <DateTimePicker 
+        value={dateObjectDevolucao} 
+        mode="date" 
+        minimumDate={dateObjectRetirada} // 👈 BÓNUS: A devolução não pode ser antes do dia da retirada!
+        onChange={(e, d) => { setShowPickerDevolucao(false); if(d){ setDateObjectDevolucao(d); setDataDevolucao(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`);} }} 
+      />}
     </>
   );
 }
