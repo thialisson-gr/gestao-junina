@@ -251,12 +251,12 @@ export default function AgendaScreen() {
               {/* 👇 TRAVA DE ATRASO: Entregue */}
               {/* 👇 TRAVA DE ATRASO E CARIMBO REAL: Entregue */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
-                if (selecionadoEstaAtrasado) {
-                  Alert.alert("Ação Inválida 🚫", "Esta peça já está Atrasada. A única ação possível agora é marcar como 'Devolvido' e cobrar a multa.");
+                if (aluguerSelecionado?.status === 'Entregue') {
+                  Alert.alert("Aviso", "Esta peça já consta como Entregue ao cliente.");
                   return;
                 }
+
                 if(aluguerSelecionado?.id) {
-                  // 👇 A CORREÇÃO: Adicionamos a data_entrega_real para o Financeiro ler!
                   atualizarAluguer(aluguerSelecionado.id, { 
                     status: 'Entregue',
                     data_entrega_real: new Date().toISOString() 
@@ -271,17 +271,31 @@ export default function AgendaScreen() {
               {/* 👇 TRAVA DE PENDENTE E CARIMBO REAL: Devolvido */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
                 if (aluguerSelecionado?.status === 'Pendente') {
-                  Alert.alert("Ação Inválida 🚫", "Não pode marcar como 'Devolvido' uma peça que ainda está como 'Pendente'. Marque como 'Entregue' primeiro.");
+                  Alert.alert(
+                    "Ação Inválida 🚫", 
+                    "Este aluguel consta como 'Pendente' (a peça nunca saiu da loja).\n\nSe o cliente não veio buscar no dia combinado, você deve EXCLUIR ou EDITAR este aluguel para liberar a peça para novos clientes."
+                  );
                   return;
                 }
+
                 if(aluguerSelecionado?.id) {
-                  // 👇 BÓNUS: Carimbo de devolução real para histórico impecável
-                  atualizarAluguer(aluguerSelecionado.id, { 
-                    status: 'Devolvido',
-                    data_devolucao_real: new Date().toISOString()
-                  }); 
+                  const listaPecas = (aluguerSelecionado?.kit_nome || '').split(', ').map((p: string) => `🔸 ${p}`).join('\n');
+                  
+                  Alert.alert(
+                    "Conferência de Devolução 📦",
+                    `Confirme se TODAS as peças abaixo estão a ser devolvidas:\n\n${listaPecas}`,
+                    [
+                      { text: "Cancelar", style: "cancel" },
+                      { text: "Sim, Receber Tudo", onPress: () => {
+                          atualizarAluguer(aluguerSelecionado.id, { 
+                            status: 'Devolvido',
+                            data_devolucao_real: new Date().toISOString()
+                          }); 
+                          setModalOpcoesVisible(false);
+                      }}
+                    ]
+                  );
                 }
-                setModalOpcoesVisible(false); 
               }}>
                 <Text style={styles.btnMenuText}>Devolvido</Text>
               </TouchableOpacity>
