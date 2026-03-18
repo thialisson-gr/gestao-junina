@@ -1,11 +1,12 @@
 import { Feather } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { signOut } from 'firebase/auth'; // 👈 Adicionado para o Logout
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // 👈 Alert adicionado aqui
+import { auth } from '../../firebaseConfig'; // 👈 Adicionado para o Firebase
 
 import AluguerModal from '../../components/AluguerModal';
 import { adicionarAluguer, atualizarAluguer, escutarAlugueres } from '../../services/agendaService';
-
 const parseDataBR = (dataStr: string) => {
   if (!dataStr || !dataStr.includes('/')) return new Date(0);
   const partes = dataStr.split('/');
@@ -122,8 +123,31 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.profileButton}>
-          <Feather name="user" size={20} color="#ea580c" />
+        <TouchableOpacity 
+          style={styles.profileButton}
+          onPress={() => {
+            Alert.alert(
+              "Sair do Sistema", 
+              "Tem certeza que deseja desconectar a sua conta?", 
+              [
+                { text: "Cancelar", style: "cancel" },
+                { 
+                  text: "Sim, Sair", 
+                  style: "destructive", 
+                  onPress: async () => {
+                    try {
+                      // O Firebase desliga e o Redirect entra em ação automaticamente!
+                      await signOut(auth);
+                    } catch (error: any) {
+                      Alert.alert("Erro", "Não foi possível desconectar.");
+                    }
+                  } 
+                }
+              ]
+            );
+          }}
+        >
+          <Feather name="log-out" size={20} color="#ea580c" />
         </TouchableOpacity>
       </View>
 

@@ -3,8 +3,7 @@ import { initializeApp } from "firebase/app";
 import {
   browserLocalPersistence,
   getReactNativePersistence,
-  initializeAuth,
-  signInAnonymously,
+  initializeAuth
 } from "firebase/auth";
 import { collection, getFirestore } from "firebase/firestore";
 import { Platform } from "react-native";
@@ -36,11 +35,6 @@ if (Platform.OS === "web") {
 }
 
 export const auth = authInstance;
-
-// Fazer o login anónimo automático
-signInAnonymously(auth)
-  .then(() => console.log("Autenticado silenciosamente no Firebase!"))
-  .catch((error) => console.error("Erro na autenticação anónima:", error));
 
 // 3. Inicializar a Base de Dados
 export const db = getFirestore(app);
