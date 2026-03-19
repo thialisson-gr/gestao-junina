@@ -53,13 +53,34 @@ export default function FinanceiroScreen() {
     }
 
     const valorNumerico = Number(valorRetirada.replace(/\./g, '').replace(',', '.'));
+
+    // 👇 NOVA REGRA DE SEGURANÇA: Bloqueio de Saldo Insuficiente
+    let saldoDisponivel = 0;
     
+    // Verificamos quanto dinheiro realmente existe no método escolhido para aquele dia
+    if (formaRetirada === 'Dinheiro') {
+      // Assumimos que as multas recebidas entram como dinheiro físico na gaveta
+      saldoDisponivel = totalDinheiro + totalMultasArrecadadas; 
+    } else if (formaRetirada === 'Pix') {
+      saldoDisponivel = totalPix;
+    } else if (formaRetirada === 'Cartão') {
+      saldoDisponivel = totalCartao;
+    }
+
+    if (valorNumerico > saldoDisponivel) {
+      Alert.alert(
+        "Saldo Insuficiente 🚫",
+        `Você está tentando retirar R$ ${valorNumerico.toFixed(2).replace('.', ',')} em ${formaRetirada}.\n\nO saldo atual disponível neste método hoje é de apenas R$ ${saldoDisponivel.toFixed(2).replace('.', ',')}.`
+      );
+      return; // 👈 Pára a função aqui e não envia para a base de dados!
+    }
+
+    // Se passou pela segurança, salva normalmente!
     await adicionarDespesa({
       descricao: descRetirada,
       valor: valorNumerico,
       forma_pagamento: formaRetirada, 
       data: dataFiltroStr, 
-      // 👇 3. CARIMBAMOS O E-MAIL DO UTILIZADOR NA DESPESA!
       operador: user?.email || 'Usuário Não Identificado' 
     });
 
@@ -94,7 +115,6 @@ export default function FinanceiroScreen() {
     const valorPago = Number(alug.valor_pago) || 0;
     const valorMulta = Number(alug.valor_multa) || 0;
     const forma = alug.forma_pagamento;
-    // Aqui ele já vai ler o criado_por automaticamente dos novos alugueres!
     const operador = alug.entregue_por || alug.criado_por || 'Usuário Não Identificado';
 
     if (!caixaPorOperador[operador]) caixaPorOperador[operador] = { dinheiro: 0, pix: 0, cartao: 0, multas: 0, total: 0 };
@@ -122,7 +142,9 @@ export default function FinanceiroScreen() {
           operador: operador,
           forma: forma || 'Dinheiro',
           valor: valorPago,
-          isSaida: false
+          isSaida: false,
+          // 👇 ADICIONADO PARA ORDENAÇÃO:
+          timestamp: alug.data_entrega_real || alug.criado_em || new Date(0).toISOString() 
         });
         operadoresSet.add(operador);
       }
@@ -149,7 +171,9 @@ export default function FinanceiroScreen() {
         operador: operador,
         forma: 'Caixa',
         valor: valorMulta,
-        isSaida: false
+        isSaida: false,
+        // 👇 ADICIONADO PARA ORDENAÇÃO:
+        timestamp: alug.data_recebimento_multa || alug.data_devolucao_real || new Date(0).toISOString()
       });
       operadoresSet.add(operador);
     }
@@ -174,11 +198,19 @@ export default function FinanceiroScreen() {
         forma: desp.forma_pagamento,
         valor: valorSaida,
         isSaida: true,
-        podeExcluir: true
+        podeExcluir: true,
+        // 👇 ADICIONADO PARA ORDENAÇÃO:
+        timestamp: desp.criado_em || new Date(0).toISOString()
       });
       operadoresSet.add(op);
     }
   });
+
+  // ==========================================
+  // 👇 A MÁGICA DA ORDENAÇÃO
+  // Ordena a lista comparando o tempo. O maior (mais recente) fica em cima!
+  // ==========================================
+  todasMovimentacoes.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   const totalEntradas = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas + totalRetiradas; 
   const totalEmCaixa = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas;
