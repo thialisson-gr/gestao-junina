@@ -122,7 +122,6 @@ export default function AgendaScreen() {
             let numeroLimpo = telefone.replace(/\D/g, '');
             if (numeroLimpo.length <= 11) { numeroLimpo = `55${numeroLimpo}`; }
             
-            // 👇 Formata também a mensagem de cuidados
             const listaPecas = (aluguer.kit_nome || '').split(', ').map((p: string) => `🔸 ${p}`).join('\n');
             
             const mensagem = `Olá ${aluguer.cliente_nome}! 🎉\n\nConfirmamos a entrega dos seguintes itens para o seu evento:\n\n${listaPecas}\n\nLembramos que os itens estão sob a sua responsabilidade. Pedimos muito cuidado com manchas, rasgos ou queimaduras para evitarmos a cobrança de multas, combinado? 😉\n\nA sua devolução está marcada para o dia *${aluguer.data_devolucao}*. Bom evento! 🌵✨`;
@@ -146,8 +145,6 @@ export default function AgendaScreen() {
       return item.status === abaAtiva;
     })
     .sort((a, b) => {
-      // 👇 ORDENAÇÃO: Coloca os mais recentes no topo
-      // O Firebase pode guardar a data como Timestamp ou texto (ISO), por isso tratamos os dois casos
       const tempoA = a.criado_em?.seconds ? a.criado_em.seconds * 1000 : new Date(a.criado_em || 0).getTime();
       const tempoB = b.criado_em?.seconds ? b.criado_em.seconds * 1000 : new Date(b.criado_em || 0).getTime();
       
@@ -214,7 +211,6 @@ export default function AgendaScreen() {
         alugueresExistentes={alugueres || []} 
       />
 
-      {/* MODAL DE GERENCIAMENTO (OPÇÕES) */}
       <Modal visible={modalOpcoesVisible} transparent animationType="slide">
         <View style={styles.modalBgBottom}>
           <View style={styles.modalContentBottom}>
@@ -236,7 +232,6 @@ export default function AgendaScreen() {
             <Text style={styles.sectionTitleOpcoes}>Alterar Status</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 15 }}>
               
-              {/* 👇 TRAVA DE ATRASO: Pendente */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
                 if (selecionadoEstaAtrasado) {
                   Alert.alert("Ação Inválida 🚫", "Esta peça já está Atrasada. Não é possível voltar o status para 'Pendente'.");
@@ -248,8 +243,6 @@ export default function AgendaScreen() {
                 <Text style={styles.btnMenuText}>Pendente</Text>
               </TouchableOpacity>
               
-              {/* 👇 TRAVA DE ATRASO: Entregue */}
-              {/* 👇 TRAVA DE ATRASO E CARIMBO REAL: Entregue */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
                 if (aluguerSelecionado?.status === 'Entregue') {
                   Alert.alert("Aviso", "Esta peça já consta como Entregue ao cliente.");
@@ -268,7 +261,6 @@ export default function AgendaScreen() {
                 <Text style={styles.btnMenuText}>Entregue</Text>
               </TouchableOpacity>
 
-              {/* 👇 TRAVA DE PENDENTE E CARIMBO REAL: Devolvido */}
               <TouchableOpacity style={[styles.btnMenu, { flex: 1, paddingVertical: 12 }]} onPress={() => { 
                 if (aluguerSelecionado?.status === 'Pendente') {
                   Alert.alert(
@@ -301,7 +293,7 @@ export default function AgendaScreen() {
               </TouchableOpacity>
             </View>
 
-            {(selecionadoEstaAtrasado || (aluguerSelecionado?.valor_multa && aluguerSelecionado.valor_multa > 0)) && (
+            {!!(selecionadoEstaAtrasado || (aluguerSelecionado?.valor_multa && aluguerSelecionado.valor_multa > 0)) && (
               <TouchableOpacity style={[styles.btnMenu, { backgroundColor: '#fee2e2', borderColor: '#fca5a5', marginBottom: 15 }]} onPress={() => { setModalOpcoesVisible(false); abrirModalMulta(aluguerSelecionado); }}>
                 <Text style={[styles.btnMenuText, { color: '#dc2626', fontWeight: 'bold' }]}>💰 Aplicar/Receber Multa</Text>
               </TouchableOpacity>

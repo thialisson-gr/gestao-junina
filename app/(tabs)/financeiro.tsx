@@ -6,6 +6,7 @@ import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TextInpu
 
 import { escutarAlugueres } from '../../services/agendaService';
 import { adicionarDespesa, escutarDespesas, excluirDespesa } from '../../services/financeiroService';
+import { useAuth } from '../_layout'; // 👈 1. IMPORTAMOS A CENTRAL
 
 const formatarMoeda = (valor: number) => `R$ ${valor.toFixed(2).replace('.', ',')}`;
 
@@ -17,6 +18,8 @@ const mascaraMoedaInput = (texto: string) => {
 };
 
 export default function FinanceiroScreen() {
+  const { user } = useAuth(); // 👈 2. PUXAMOS O CRACHÁ DO UTILIZADOR LOGADO
+
   const [alugueres, setAlugueres] = useState<any[]>([]);
   const [despesas, setDespesas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,7 +27,6 @@ export default function FinanceiroScreen() {
   const [dataFiltro, setDataFiltro] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // 👇 NOVO ESTADO: Filtro de Funcionário
   const [filtroOperador, setFiltroOperador] = useState('Todos');
 
   const [modalRetiradaVisible, setModalRetiradaVisible] = useState(false);
@@ -57,7 +59,8 @@ export default function FinanceiroScreen() {
       valor: valorNumerico,
       forma_pagamento: formaRetirada, 
       data: dataFiltroStr, 
-      operador: 'Usuário Não Identificado' // Futuro: auth.currentUser.nome
+      // 👇 3. CARIMBAMOS O E-MAIL DO UTILIZADOR NA DESPESA!
+      operador: user?.email || 'Usuário Não Identificado' 
     });
 
     setDescRetirada('');
@@ -80,7 +83,6 @@ export default function FinanceiroScreen() {
   
   let caixaPorOperador: any = {};
   
-  // 👇 NOVA LISTA UNIFICADA (Extrato)
   let todasMovimentacoes: any[] = [];
   let operadoresSet = new Set<string>();
 
@@ -92,6 +94,7 @@ export default function FinanceiroScreen() {
     const valorPago = Number(alug.valor_pago) || 0;
     const valorMulta = Number(alug.valor_multa) || 0;
     const forma = alug.forma_pagamento;
+    // Aqui ele já vai ler o criado_por automaticamente dos novos alugueres!
     const operador = alug.entregue_por || alug.criado_por || 'Usuário Não Identificado';
 
     if (!caixaPorOperador[operador]) caixaPorOperador[operador] = { dinheiro: 0, pix: 0, cartao: 0, multas: 0, total: 0 };
@@ -104,7 +107,6 @@ export default function FinanceiroScreen() {
 
     const pagamentoConfirmado = alug.status === 'Entregue' || alug.status === 'Devolvido';
 
-    // REGISTA ENTRADAS DE ALUGUEL NO EXTRATO
     if (dataEntradaCaixa === dataFiltroStr && pagamentoConfirmado) {
       if (forma === 'Pix') { totalPix += valorPago; caixaPorOperador[operador].pix += valorPago; }
       else if (forma === 'Cartão') { totalCartao += valorPago; caixaPorOperador[operador].cartao += valorPago; }
@@ -135,7 +137,6 @@ export default function FinanceiroScreen() {
       dataMultaCaixa = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
     }
 
-    // REGISTA MULTAS RECEBIDAS NO EXTRATO
     if (dataMultaCaixa === dataFiltroStr && alug.status_multa === 'Recebida' && valorMulta > 0) {
       totalMultasArrecadadas += valorMulta;
       caixaPorOperador[operador].multas += valorMulta;
@@ -182,10 +183,8 @@ export default function FinanceiroScreen() {
   const totalEntradas = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas + totalRetiradas; 
   const totalEmCaixa = totalPix + totalDinheiro + totalCartao + totalMultasArrecadadas;
 
-  // 👇 PREPARA A LISTA FILTRADA PARA EXIBIÇÃO
   const listaOperadores = ['Todos', ...Array.from(operadoresSet)];
   
-  // Se mudarmos de dia e o operador selecionado não trabalhou, reseta o filtro
   if (filtroOperador !== 'Todos' && !operadoresSet.has(filtroOperador)) {
     setFiltroOperador('Todos');
   }
@@ -244,7 +243,6 @@ export default function FinanceiroScreen() {
               <Text style={[styles.metodoValor, { color: '#0369a1' }]}>{formatarMoeda(totalPix)}</Text>
             </View>
 
-            {/* 👇 NOVO CARTÃO DA MAQUININHA */}
             <View style={[styles.metodoCard, { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' }]}>
               <View style={[styles.metodoIcone, { backgroundColor: '#e9d5ff' }]}><Feather name="credit-card" size={16} color="#9333ea" /></View>
               <Text style={styles.metodoLabel}>Cartão</Text>
@@ -252,15 +250,11 @@ export default function FinanceiroScreen() {
             </View>
           </View>
 
-          {/* ========================================== */}
-          {/* 👇 EXTRATO DE MOVIMENTAÇÕES COM FILTRO */}
-          {/* ========================================== */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>🧾 Extrato de Movimentações</Text>
             </View>
 
-            {/* FILTRO DE FUNCIONÁRIO (Só aparece se houver dados no dia) */}
             {listaOperadores.length > 1 && (
               <View style={[styles.pickerContainer, { marginBottom: 16, backgroundColor: '#fff', borderColor: '#e5e7eb' }]}>
                 <Picker selectedValue={filtroOperador} onValueChange={setFiltroOperador} style={{ height: 50 }}>
@@ -302,7 +296,6 @@ export default function FinanceiroScreen() {
         </ScrollView>
       )}
 
-      {/* MODAL DE RETIRADA */}
       <Modal visible={modalRetiradaVisible} transparent animationType="slide">
         <View style={styles.modalBg}>
           <View style={styles.modalContent}>

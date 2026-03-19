@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth'; // 👈 Adicionado para o Logout
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // 👈 Alert adicionado aqui
 import { auth } from '../../firebaseConfig'; // 👈 Adicionado para o Firebase
+import { useAuth } from '../_layout';
 
 import AluguerModal from '../../components/AluguerModal';
 import { adicionarAluguer, atualizarAluguer, escutarAlugueres } from '../../services/agendaService';
@@ -19,6 +20,7 @@ const getHojeStr = () => {
 };
 
 export default function HomeScreen() {
+  const { user } = useAuth();
   const router = useRouter(); 
   const [modalVisible, setModalVisible] = useState(false);
   const [aluguerParaEditar, setAluguerParaEditar] = useState<any>(null);
@@ -250,13 +252,40 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      <AluguerModal 
+     <AluguerModal 
         visible={modalVisible} 
         aluguerParaEditar={aluguerParaEditar}
         onClose={() => { setModalVisible(false); setAluguerParaEditar(null); }} 
         onSave={async (d: any) => { 
-          if(d.id) { await atualizarAluguer(d.id, d); } else { await adicionarAluguer(d); }
-          setModalVisible(false); setAluguerParaEditar(null);
+          
+          // 👇 1. PREPARAMOS O CARIMBO DE AUDITORIA
+          const agora = new Date().toISOString(); // Pega a data e hora exata do clique
+          const emailOperador = user?.email || 'operador_desconhecido'; // Pega o e-mail logado
+
+          if (d.id) { 
+            // 👇 2. SE FOR ATUALIZAÇÃO (Já existe ID)
+            const dadosAtualizados = {
+              ...d, // Pega todos os dados do formulário
+              atualizado_por: emailOperador, // Carimba quem alterou
+              atualizado_em: agora           // Carimba quando alterou
+            };
+            await atualizarAluguer(d.id, dadosAtualizados); 
+
+          } else { 
+            // 👇 3. SE FOR UM NOVO REGISTO
+            const dadosNovos = {
+              ...d,
+              criado_por: emailOperador,
+              criado_em: agora,
+              // Ao criar, marcamos também como a última atualização para consistência
+              atualizado_por: emailOperador, 
+              atualizado_em: agora
+            };
+            await adicionarAluguer(dadosNovos); 
+          }
+
+          setModalVisible(false); 
+          setAluguerParaEditar(null);
         }} 
         alugueresExistentes={alugueres || []} 
       />

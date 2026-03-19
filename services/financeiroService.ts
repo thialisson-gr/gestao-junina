@@ -6,50 +6,33 @@ import {
   onSnapshot,
   query,
 } from "firebase/firestore";
-import { GAVETAS, getGaveta } from "../firebaseConfig";
+import { auth, GAVETAS, getGaveta } from "../firebaseConfig"; // 👈 Importamos o auth
 
-// Adicionar uma nova retirada
-export const adicionarDespesa = async (dados: any) => {
-  try {
-    const docRef = await addDoc(getGaveta(GAVETAS.DESPESAS), dados);
-    return docRef.id;
-  } catch (error) {
-    console.error("Erro ao adicionar despesa:", error);
-    throw error;
-  }
-};
-
-// Escutar as retiradas em tempo real
-export const escutarDespesas = (
-  callback: (dados: any[]) => void,
-  errorCallback: (erro: any) => void,
-) => {
+export const escutarDespesas = (callback: any, errorCallback: any) => {
   const q = query(getGaveta(GAVETAS.DESPESAS));
-
-  const unsubscribe = onSnapshot(
+  return onSnapshot(
     q,
-    (snapshot: any) => {
-      const despesas = snapshot.docs.map((doc: any) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      callback(despesas);
-    },
-    (error: any) => {
-      errorCallback(error);
-    },
+    (snapshot: any) =>
+      callback(
+        snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() })),
+      ),
+    errorCallback,
   );
-
-  return unsubscribe;
 };
 
-// Excluir uma retirada
+export const adicionarDespesa = async (dados: any) => {
+  // Puxa o e-mail direto do motor do Firebase
+  const emailOperador = auth.currentUser?.email || "Desconhecido";
+
+  return await addDoc(getGaveta(GAVETAS.DESPESAS), {
+    ...dados,
+    operador: emailOperador, // 👈 O carimbo garantido
+    criado_em: new Date().toISOString(),
+  });
+};
+
 export const excluirDespesa = async (id: string) => {
-  try {
-    const db = getFirestore();
-    await deleteDoc(doc(db, getGaveta(GAVETAS.DESPESAS).path, id));
-  } catch (error) {
-    console.error("Erro ao excluir despesa:", error);
-    throw error;
-  }
+  return await deleteDoc(
+    doc(getFirestore(), getGaveta(GAVETAS.DESPESAS).path, id),
+  );
 };
