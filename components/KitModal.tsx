@@ -80,8 +80,27 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar, kits
       return;
     }
 
+    const codigoFormatado = idEtiqueta.trim().toUpperCase();
+
+    // 👇 REGRA DE NEGÓCIO: Validação de Código Único
+    const codigoJaExiste = kitsExistentes.find(
+      (kit: any) => kit.id_etiqueta?.trim().toUpperCase() === codigoFormatado
+    );
+
+    // Se encontrou um código igual...
+    if (codigoJaExiste) {
+      // Se estamos a criar uma PEÇA NOVA, ou se estamos a editar mas o código pertence a OUTRA peça
+      if (!kitParaEditar || (kitParaEditar && kitParaEditar.id !== codigoJaExiste.id)) {
+        Alert.alert(
+          "Código Duplicado 🚫", 
+          `Já existe uma peça no acervo com a etiqueta "${codigoFormatado}" (${codigoJaExiste.personagem}). Por favor, digite um código diferente.`
+        );
+        return; // Pára a função aqui e não salva!
+      }
+    }
+
     onSave({
-      id_etiqueta: idEtiqueta.trim(),
+      id_etiqueta: codigoFormatado, // Salvamos sempre em maiúsculas para ficar padronizado
       personagem: personagem.trim(),
       ano_tema: anoTema.trim(),
       genero: genero,
@@ -146,7 +165,12 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar, kits
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView 
+            style={styles.form} 
+            showsVerticalScrollIndicator={false} 
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true} // 👈 ADICIONE ISTO AQUI
+          >
             
             <TouchableOpacity style={styles.imagePickerButton} onPress={escolherImagem}>
               {imagemUri ? (
@@ -174,7 +198,7 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar, kits
             <TextInput style={styles.input} value={personagem} onChangeText={setPersonagem} placeholder="Ex: Noivo, Lampião, Tiara de Girassol..." />
 
             {/* 👇 Lógica de Autocompletar do Ano/Tema */}
-            <View style={{ zIndex: 10 }}>
+            <View style={{ zIndex: 10, position: 'relative' }}>
               <Text style={styles.label}>Ano / Coleção *</Text>
               <TextInput 
                 style={styles.input} 
@@ -188,7 +212,11 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar, kits
               />
               
               {mostrarSugestoesAno && sugestoesFiltradasAno.length > 0 && anoTema.length > 0 && (
-                <View style={styles.listaSugestoes}>
+                <ScrollView 
+                  style={styles.listaSugestoes}
+                  nestedScrollEnabled={true}
+                  keyboardShouldPersistTaps="handled"
+                >
                   {sugestoesFiltradasAno.map((sugestao, index) => (
                     <TouchableOpacity 
                       key={index}
@@ -203,7 +231,7 @@ export default function KitModal({ visible, onClose, onSave, kitParaEditar, kits
                       <Text style={styles.itemSugestaoTexto}>{sugestao}</Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                </ScrollView>
               )}
             </View>
 
@@ -293,9 +321,7 @@ const styles = StyleSheet.create({
   imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   imagePlaceholderText: { color: '#9ca3af', fontSize: 14, fontWeight: '500' },
   previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-
-  // 👇 Novos estilos da lista de Autocompletar
-  listaSugestoes: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, maxHeight: 120, position: 'absolute', top: 80, left: 0, right: 0, zIndex: 100, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+  listaSugestoes: {backgroundColor: '#fff', borderWidth: 1, borderColor: '#e5e7eb', borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12, maxHeight: 160, marginTop: -10, marginBottom: 16,},
   itemSugestao: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   itemSugestaoTexto: { fontSize: 15, color: '#374151' }
 });
